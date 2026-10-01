@@ -48,7 +48,7 @@
 
 
     /* ใช้เช็กว่าเบราว์เซอร์โหลดไฟล์ตัวใหม่แล้ว (ดูใน Console: F12) */
-    const EXPORT_IMAGE_VERSION = "2026-10-01f (print api)";
+    const EXPORT_IMAGE_VERSION = "2026-10-01g (fit table)";
 
     console.info(`[export-image.js] loaded ${EXPORT_IMAGE_VERSION}`);
 
@@ -361,8 +361,88 @@ body.zg-exporting [contenteditable="true"]:focus {
     }
 
 
-    /* พื้นที่ที่จะตัดออกมา (พิกัดบนจอ) */
+    /* ขอบขวาจริงของตาราง (ตารางหด/ขยายตามจำนวนเดือน — ดู table-fit.js)
+       null = หาไม่ได้ / ตารางยาวเกินจอ (ใช้ขอบเดิม) */
+    function tableVisibleRight() {
+
+        const viewport = document.getElementById("timelineViewport");
+        const area = document.getElementById("scheduleArea");
+
+        if (!viewport || !area || typeof timelineWidthPx === "undefined" || !(timelineWidthPx > 0)) {
+            return null;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const areaRight = area.getBoundingClientRect().right;
+
+        const endX = viewportRect.left + timelineWidthPx - viewport.scrollLeft;
+
+        /* +2 = เส้นปิดท้ายตาราง */
+        return endX + 2 < areaRight ? endX + 2 : null;
+    }
+
+
+    /* พื้นที่ที่จะตัดออกมา (พิกัดบนจอ) — ตัดขอบขวาให้พอดีกับตารางเสมอ */
     function getCropRect(kind) {
+
+        const rect = getFullCropRect(kind);
+
+        const tableRight = tableVisibleRight();
+
+        if (tableRight === null) {
+            return rect;
+        }
+
+        if (kind === "table") {
+
+            rect.right = Math.min(rect.right, tableRight);
+
+        } else {
+
+            /* ทั้งกระดาน: เว้นขอบขวาเท่ากับขอบซ้าย (ระยะจากขอบกระดานถึงตาราง) */
+            const area = document.getElementById("scheduleArea");
+
+            const margin = area
+                ? Math.max(8, area.getBoundingClientRect().left - rect.left)
+                : 16;
+
+            rect.right = Math.min(rect.right, tableRight + margin);
+        }
+
+        return rect;
+    }
+
+
+    /* ทั้งกระดานถูกตัดขอบขวา → ย้ายกล่อง Update มาไว้ในกรอบชั่วคราวตอนถ่าย */
+    function moveUpdateDateInto(crop) {
+
+        const element = document.querySelector(".zg-update-date");
+
+        if (!element) {
+            return () => {};
+        }
+
+        const rect = element.getBoundingClientRect();
+
+        const margin = 8;
+
+        if (!rect.width || rect.right <= crop.right - margin + 0.5) {
+            return () => {};
+        }
+
+        const previous = element.style.transform;
+
+        const shift = Math.max(crop.left + margin - rect.left, crop.right - margin - rect.right);
+
+        element.style.transform = `translateX(${shift}px) ${previous || ""}`.trim();
+
+        return () => {
+            element.style.transform = previous;
+        };
+    }
+
+
+    function getFullCropRect(kind) {
 
         if (kind === "table") {
 
@@ -480,12 +560,18 @@ body.zg-exporting [contenteditable="true"]:focus {
 
         let restoreScroll = null;
 
+        let restoreUpdateDate = null;
+
         try {
 
             await nextFrames(2);
 
             const crop =
                 getCropRect(kind);
+
+            if (kind !== "table") {
+                restoreUpdateDate = moveUpdateDateInto(crop);
+            }
 
             /* ไลบรารีถ่ายภาพไม่จำตำแหน่ง scroll → แปลง scroll เป็น transform ชั่วคราว */
             restoreScroll =
@@ -544,6 +630,10 @@ body.zg-exporting [contenteditable="true"]:focus {
 
             if (restoreScroll) {
                 restoreScroll();
+            }
+
+            if (restoreUpdateDate) {
+                restoreUpdateDate();
             }
 
             document.body.classList.remove("zg-exporting");
