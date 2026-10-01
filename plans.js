@@ -1,0 +1,1270 @@
+"use strict";
+
+/* =========================================================
+   PLANS.JS — จัดการหลายแผน (เลือก / เพิ่ม / เปลี่ยนชื่อ / ลบ)
+   เก็บไว้ในเบราว์เซอร์ (localStorage) และสลับไปมาได้
+
+   โหลดหลัง io.js (ใช้ window.ZGPlanIO.build / apply)
+   ไม่แก้โค้ดเดิมใน app.js
+
+   ปุ่มใน index.html (กลุ่ม toolbar-group--plan):
+     #planSelectBtn  เลือกแผน (มี span.plan-select-name แสดงชื่อ)
+     #planAddBtn     เพิ่มแผน
+     #planRenameBtn  เปลี่ยนชื่อแผน
+     #planDeleteBtn  ลบแผน
+
+   บันทึกอัตโนมัติ: ทุก 3 วินาทีถ้ามีอะไรเปลี่ยน, ตอนสลับแผน,
+   และตอนปิด/ออกจากหน้า
+========================================================= */
+
+(function () {
+
+    const selectBtn = document.getElementById("planSelectBtn");
+    const addBtn = document.getElementById("planAddBtn");
+    const renameBtn = document.getElementById("planRenameBtn");
+    const deleteBtn = document.getElementById("planDeleteBtn");
+
+    if (!selectBtn || !addBtn || !renameBtn || !deleteBtn) {
+
+        console.error(
+            "[plans.js] ไม่พบปุ่ม #planSelectBtn / #planAddBtn / #planRenameBtn / #planDeleteBtn ใน index.html"
+        );
+
+        return;
+    }
+
+    const nameEl =
+        selectBtn.querySelector(".plan-select-name") ||
+        selectBtn.querySelector("span");
+
+
+    /* =====================================================
+       CONFIG
+    ===================================================== */
+
+    const STORAGE_KEY = "zg-property-schedule-plans-v1";
+
+    const AUTOSAVE_MS = 3000;
+
+    const DEFAULT_FIRST_NAME = "แผนตัวอย่าง (Property)";
+
+    const NAME_MAX = 60;
+
+
+    /* =====================================================
+       STYLE
+    ===================================================== */
+
+    const style =
+        document.createElement("style");
+
+    style.textContent = `
+.zg-plan-dropdown {
+    position: fixed;
+    min-width: 240px;
+    max-width: 340px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid #d5dad7;
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
+    z-index: 26000;
+    font-size: 12px;
+}
+.zg-plan-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #333333;
+    font-family: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+.zg-plan-item:hover { background: #f0f4f2; }
+.zg-plan-item.active { background: #e5f0e9; color: #1e7a46; font-weight: 700; }
+.zg-plan-item-check { width: 14px; flex: 0 0 14px; color: #1e7a46; }
+.zg-plan-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.zg-plan-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zg-plan-item-time { color: #8a938d; font-size: 10px; font-weight: 400; }
+.zg-plan-dropdown-sep { height: 1px; margin: 4px 2px; background: #eef1ef; }
+.zg-plan-dropdown-add {
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #3a6b2f;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+.zg-plan-dropdown-add:hover { background: #f1f8ea; }
+
+.zg-plan-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 30, 25, .25);
+    z-index: 31000;
+}
+.zg-plan-dialog {
+    width: 300px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #ffffff;
+    border: 1px solid #d5dad7;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .2);
+    font-size: 12px;
+    color: #222222;
+}
+.zg-plan-dialog-title { font-size: 13px; font-weight: 700; }
+.zg-plan-dialog-label { color: #7a827e; font-size: 10px; margin-bottom: 3px; }
+.zg-plan-dialog input[type="text"] {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    border: 1px solid #dde3e0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+}
+.zg-plan-dialog-radio { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+.zg-plan-dialog-message { line-height: 1.45; }
+.zg-plan-dialog-error { color: #d33b43; font-size: 11px; min-height: 14px; }
+.zg-plan-dialog-actions { display: flex; gap: 8px; }
+.zg-plan-dialog-actions button {
+    flex: 1;
+    height: 30px;
+    border: 1px solid #dde3e0;
+    border-radius: 6px;
+    background: #ffffff;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.zg-plan-dialog-actions .zg-plan-ok {
+    background: #3a8a4f;
+    border-color: #3a8a4f;
+    color: #ffffff;
+    font-weight: 700;
+}
+.zg-plan-dialog-actions .zg-plan-danger {
+    background: #d33b43;
+    border-color: #d33b43;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.zg-plan-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 70px;
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    background: #1e2924;
+    color: #ffffff;
+    border-radius: 8px;
+    font-size: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .2);
+    z-index: 32000;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+.zg-plan-toast.visible { opacity: 1; }
+.zg-plan-toast.error { background: #d33b43; }
+`;
+
+    document.head.appendChild(style);
+
+
+    /* =====================================================
+       HELPERS
+    ===================================================== */
+
+    function createPlanId() {
+
+        return (
+            "plan-" +
+            Date.now() +
+            "-" +
+            Math.random().toString(36).slice(2, 8)
+        );
+    }
+
+
+    function escapeText(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+
+    function formatTime(iso) {
+
+        const date = new Date(iso);
+
+        if (isNaN(date)) {
+            return "";
+        }
+
+        const pad = number => String(number).padStart(2, "0");
+
+        return (
+            `แก้ไขล่าสุด ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()} ` +
+            `${pad(date.getHours())}:${pad(date.getMinutes())}`
+        );
+    }
+
+
+    let toastEl = null;
+    let toastTimer = null;
+
+    function showToast(message, isError = false) {
+
+        if (!toastEl) {
+
+            toastEl = document.createElement("div");
+            toastEl.className = "zg-plan-toast";
+            document.body.appendChild(toastEl);
+        }
+
+        toastEl.textContent = message;
+        toastEl.classList.toggle("error", isError);
+        toastEl.classList.add("visible");
+
+        clearTimeout(toastTimer);
+
+        toastTimer = setTimeout(
+            () => toastEl.classList.remove("visible"),
+            isError ? 4000 : 1800
+        );
+    }
+
+
+    function waitFrames(count, callback) {
+
+        if (count <= 0) {
+            callback();
+            return;
+        }
+
+        requestAnimationFrame(() => waitFrames(count - 1, callback));
+    }
+
+
+    /* ข้อมูลแผน โดยไม่สนเวลา export (ใช้เทียบว่ามีอะไรเปลี่ยนไหม) */
+    function snapshotKey(data) {
+
+        const copy = { ...data };
+
+        delete copy.exportedAt;
+
+        return JSON.stringify(copy);
+    }
+
+
+    /* =====================================================
+       STORAGE
+       store = { activeId, plans: [{ id, name, updatedAt, data }] }
+    ===================================================== */
+
+    let store = null;
+
+    let lastSavedKey = "";
+
+    let storageAvailable = true;
+
+
+    function readStore() {
+
+        try {
+
+            const raw = localStorage.getItem(STORAGE_KEY);
+
+            if (!raw) {
+                return null;
+            }
+
+            const parsed = JSON.parse(raw);
+
+            if (
+                !parsed ||
+                !Array.isArray(parsed.plans) ||
+                parsed.plans.length === 0
+            ) {
+                return null;
+            }
+
+            parsed.plans = parsed.plans.filter(
+                plan => plan && plan.id && plan.data
+            );
+
+            return parsed.plans.length ? parsed : null;
+
+        } catch (error) {
+
+            return null;
+        }
+    }
+
+
+    function writeStore() {
+
+        if (!storageAvailable) {
+            return false;
+        }
+
+        try {
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+
+            return true;
+
+        } catch (error) {
+
+            console.error(error);
+
+            showToast(
+                "บันทึกแผนในเบราว์เซอร์ไม่ได้ (พื้นที่เต็มหรือถูกปิดไว้) — ควร Export เก็บไว้",
+                true
+            );
+
+            return false;
+        }
+    }
+
+
+    function getActivePlan() {
+
+        return (
+            store.plans.find(plan => plan.id === store.activeId) ||
+            store.plans[0]
+        );
+    }
+
+
+    /* บันทึกสถานะปัจจุบันลงแผนที่เปิดอยู่ (บันทึกจริงเฉพาะเมื่อมีอะไรเปลี่ยน) */
+    function saveActive(force = false) {
+
+        if (!store) {
+            return;
+        }
+
+        const plan = getActivePlan();
+
+        if (!plan) {
+            return;
+        }
+
+        let data;
+
+        try {
+
+            data = window.ZGPlanIO.build();
+
+        } catch (error) {
+
+            console.error(error);
+
+            return;
+        }
+
+        const key = snapshotKey(data);
+
+        if (!force && key === lastSavedKey) {
+            return;
+        }
+
+        plan.data = data;
+        plan.updatedAt = new Date().toISOString();
+
+        if (writeStore()) {
+            lastSavedKey = key;
+        }
+    }
+
+
+    /* =====================================================
+       BLANK PLAN
+    ===================================================== */
+
+    function buildBlankPlanData(title) {
+
+        const today = new Date();
+
+        const start =
+            new Date(today.getFullYear(), today.getMonth(), 1);
+
+        const end =
+            new Date(today.getFullYear() + 1, today.getMonth(), 1);
+
+        return {
+
+            app: window.ZGPlanIO.FILE_APP,
+
+            version: window.ZGPlanIO.FILE_VERSION,
+
+            title: title || "Property schedule plan",
+
+            subtitle: "title",
+
+            updateDate: formatDateInputValue(today),
+
+            timeline: {
+
+                start: formatDateInputValue(start),
+
+                end: formatDateInputValue(end),
+
+                zoom: 1,
+
+                scrollLeft: 0
+            },
+
+            categories: [
+                createDefaultCategory(),
+                createDefaultCategory(),
+                createDefaultCategory()
+            ],
+
+            roles: [
+                { id: createRoleId(), name: "งานทั่วไป", color: "#f0f0f0" },
+                { id: createRoleId(), name: "สำคัญ", color: "#d9534f" },
+                { id: createRoleId(), name: "รอดำเนินการ", color: "#e1a638" }
+            ],
+
+            objects: [],
+
+            notes: [createNote()],
+
+            texts: []
+        };
+    }
+
+
+    /* =====================================================
+       SWITCH / ADD / RENAME / DELETE
+    ===================================================== */
+
+    function applyPlan(plan) {
+
+        try {
+
+            window.ZGPlanIO.apply(JSON.parse(JSON.stringify(plan.data)));
+
+        } catch (error) {
+
+            console.error(error);
+
+            showToast("เปิดแผนนี้ไม่สำเร็จ ข้อมูลบางส่วนเสียหาย", true);
+
+            return false;
+        }
+
+        store.activeId = plan.id;
+
+        writeStore();
+
+        updateLabel();
+
+        /* รอ render (และกล่อง text) เสร็จ แล้วจำสถานะไว้เป็นจุดตั้งต้น */
+        waitFrames(3, () => {
+
+            try {
+                lastSavedKey = snapshotKey(window.ZGPlanIO.build());
+            } catch (error) {
+                lastSavedKey = "";
+            }
+
+            /* แจ้ง history.js ให้เริ่มประวัติ ย้อนกลับ/ทำซ้ำ ของแผนนี้ใหม่ */
+            window.dispatchEvent(new CustomEvent("zg-plan-applied", { detail: { planId: plan.id } }));
+        });
+
+        return true;
+    }
+
+
+    function switchToPlan(planId) {
+
+        if (planId === store.activeId) {
+            return;
+        }
+
+        const target =
+            store.plans.find(plan => plan.id === planId);
+
+        if (!target) {
+            return;
+        }
+
+        saveActive(true);
+
+        if (applyPlan(target)) {
+            showToast(`เปิดแผน "${target.name}"`);
+        }
+    }
+
+
+    function uniqueName(baseName) {
+
+        const names =
+            new Set(store.plans.map(plan => plan.name));
+
+        if (!names.has(baseName)) {
+            return baseName;
+        }
+
+        let index = 2;
+
+        while (names.has(`${baseName} (${index})`)) {
+            index += 1;
+        }
+
+        return `${baseName} (${index})`;
+    }
+
+
+    function addPlan(name, copyCurrent) {
+
+        saveActive(true);
+
+        const data =
+            copyCurrent
+                ? JSON.parse(JSON.stringify(getActivePlan().data))
+                : buildBlankPlanData();
+
+        const plan = {
+
+            id: createPlanId(),
+
+            name,
+
+            updatedAt: new Date().toISOString(),
+
+            data
+        };
+
+        store.plans.push(plan);
+
+        if (applyPlan(plan)) {
+            showToast(`สร้างแผน "${name}" แล้ว`);
+        }
+    }
+
+
+    function renamePlan(planId, name) {
+
+        const plan =
+            store.plans.find(item => item.id === planId);
+
+        if (!plan) {
+            return;
+        }
+
+        plan.name = name;
+
+        writeStore();
+
+        updateLabel();
+
+        showToast("เปลี่ยนชื่อแผนแล้ว");
+    }
+
+
+    function deletePlan(planId) {
+
+        if (store.plans.length <= 1) {
+            return;
+        }
+
+        const index =
+            store.plans.findIndex(plan => plan.id === planId);
+
+        if (index < 0) {
+            return;
+        }
+
+        const [removed] =
+            store.plans.splice(index, 1);
+
+        if (removed.id === store.activeId) {
+
+            const next =
+                store.plans[Math.min(index, store.plans.length - 1)];
+
+            applyPlan(next);
+
+        } else {
+
+            writeStore();
+        }
+
+        showToast(`ลบแผน "${removed.name}" แล้ว`);
+    }
+
+
+    function updateLabel() {
+
+        const plan = getActivePlan();
+
+        if (nameEl && plan) {
+
+            nameEl.textContent = plan.name;
+
+            selectBtn.title = plan.name;
+        }
+
+        deleteBtn.disabled = store.plans.length <= 1;
+
+        deleteBtn.title =
+            store.plans.length <= 1
+                ? "ต้องมีอย่างน้อย 1 แผน"
+                : "ลบแผนนี้";
+    }
+
+
+    /* =====================================================
+       DROPDOWN (เลือกแผน)
+    ===================================================== */
+
+    let dropdown = null;
+
+
+    function closeDropdown() {
+
+        if (dropdown) {
+            dropdown.remove();
+        }
+
+        dropdown = null;
+    }
+
+
+    function openDropdown() {
+
+        closeDropdown();
+        closeDialog();
+
+        saveActive();
+
+        const menu =
+            document.createElement("div");
+
+        menu.className =
+            "zg-plan-dropdown";
+
+        const sorted =
+            store.plans.slice();
+
+        menu.innerHTML = `
+            ${sorted.map(plan => `
+                <button type="button"
+                    class="zg-plan-item ${plan.id === store.activeId ? "active" : ""}"
+                    data-plan-id="${escapeText(plan.id)}">
+                    <span class="zg-plan-item-check">${plan.id === store.activeId ? "✓" : ""}</span>
+                    <span class="zg-plan-item-text">
+                        <span class="zg-plan-item-name">${escapeText(plan.name)}</span>
+                        <span class="zg-plan-item-time">${escapeText(formatTime(plan.updatedAt))}</span>
+                    </span>
+                </button>
+            `).join("")}
+            <div class="zg-plan-dropdown-sep"></div>
+            <button type="button" class="zg-plan-dropdown-add">＋ เพิ่มแผนใหม่</button>
+        `;
+
+        menu.addEventListener("click", event => {
+
+            const item =
+                event.target.closest(".zg-plan-item");
+
+            if (item) {
+
+                closeDropdown();
+
+                switchToPlan(item.dataset.planId);
+
+                return;
+            }
+
+            if (event.target.closest(".zg-plan-dropdown-add")) {
+
+                closeDropdown();
+
+                openAddDialog();
+            }
+        });
+
+        document.body.appendChild(menu);
+
+        const rect =
+            selectBtn.getBoundingClientRect();
+
+        menu.style.left =
+            `${Math.max(6, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 6))}px`;
+
+        menu.style.top =
+            `${rect.bottom + 6}px`;
+
+        dropdown = menu;
+    }
+
+
+    /* =====================================================
+       DIALOGS
+    ===================================================== */
+
+    let dialogOverlay = null;
+
+
+    function closeDialog() {
+
+        if (dialogOverlay) {
+            dialogOverlay.remove();
+        }
+
+        dialogOverlay = null;
+    }
+
+
+    function openDialog(innerHtml, onOk) {
+
+        closeDialog();
+        closeDropdown();
+
+        const overlay =
+            document.createElement("div");
+
+        overlay.className =
+            "zg-plan-overlay";
+
+        overlay.innerHTML =
+            `<div class="zg-plan-dialog">${innerHtml}</div>`;
+
+        const dialog =
+            overlay.querySelector(".zg-plan-dialog");
+
+        const ok = () => {
+
+            if (onOk(dialog) !== false) {
+                closeDialog();
+            }
+        };
+
+        overlay.addEventListener("mousedown", event => {
+
+            if (event.target === overlay) {
+                closeDialog();
+            }
+        });
+
+        dialog.querySelector("[data-ok]")
+            .addEventListener("click", ok);
+
+        dialog.querySelector("[data-cancel]")
+            .addEventListener("click", closeDialog);
+
+        dialog.addEventListener("keydown", event => {
+
+            if (event.key === "Enter" && event.target.tagName !== "BUTTON") {
+
+                event.preventDefault();
+
+                ok();
+            }
+
+            if (event.key === "Escape") {
+
+                event.stopPropagation();
+
+                closeDialog();
+            }
+        });
+
+        document.body.appendChild(overlay);
+
+        dialogOverlay = overlay;
+
+        const firstInput =
+            dialog.querySelector('input[type="text"]');
+
+        if (firstInput) {
+
+            firstInput.focus();
+            firstInput.select();
+
+        } else {
+
+            dialog.querySelector("[data-ok]").focus();
+        }
+
+        return dialog;
+    }
+
+
+    function readName(dialog) {
+
+        const input =
+            dialog.querySelector('input[type="text"]');
+
+        const error =
+            dialog.querySelector(".zg-plan-dialog-error");
+
+        const name =
+            input.value.trim().slice(0, NAME_MAX);
+
+        if (!name) {
+
+            error.textContent = "กรุณาตั้งชื่อแผน";
+
+            input.focus();
+
+            return null;
+        }
+
+        return name;
+    }
+
+
+    function openAddDialog() {
+
+        openDialog(`
+            <div class="zg-plan-dialog-title">เพิ่มแผนใหม่</div>
+
+            <div>
+                <div class="zg-plan-dialog-label">ชื่อแผน</div>
+                <input type="text" maxlength="${NAME_MAX}" value="${escapeText(uniqueName("แผนใหม่"))}">
+            </div>
+
+            <div>
+                <label class="zg-plan-dialog-radio">
+                    <input type="radio" name="zgPlanStart" value="blank" checked>
+                    เริ่มจากแผนเปล่า
+                </label>
+                <label class="zg-plan-dialog-radio">
+                    <input type="radio" name="zgPlanStart" value="copy">
+                    คัดลอกจากแผนที่เปิดอยู่
+                </label>
+            </div>
+
+            <div class="zg-plan-dialog-error"></div>
+
+            <div class="zg-plan-dialog-actions">
+                <button type="button" data-cancel>ยกเลิก</button>
+                <button type="button" class="zg-plan-ok" data-ok>สร้างแผน</button>
+            </div>
+        `, dialog => {
+
+            const name = readName(dialog);
+
+            if (!name) {
+                return false;
+            }
+
+            const copyCurrent =
+                dialog.querySelector('input[name="zgPlanStart"]:checked').value === "copy";
+
+            addPlan(name, copyCurrent);
+        });
+    }
+
+
+    function openRenameDialog() {
+
+        const plan = getActivePlan();
+
+        openDialog(`
+            <div class="zg-plan-dialog-title">เปลี่ยนชื่อแผน</div>
+
+            <div>
+                <div class="zg-plan-dialog-label">ชื่อแผน</div>
+                <input type="text" maxlength="${NAME_MAX}" value="${escapeText(plan.name)}">
+            </div>
+
+            <div class="zg-plan-dialog-error"></div>
+
+            <div class="zg-plan-dialog-actions">
+                <button type="button" data-cancel>ยกเลิก</button>
+                <button type="button" class="zg-plan-ok" data-ok>บันทึก</button>
+            </div>
+        `, dialog => {
+
+            const name = readName(dialog);
+
+            if (!name) {
+                return false;
+            }
+
+            renamePlan(plan.id, name);
+        });
+    }
+
+
+    /* =====================================================
+       IMPORT .json → เลือก เพิ่มเป็นแผนใหม่ / แทนที่แผนที่เปิดอยู่
+    ===================================================== */
+
+    function importAsNewPlan(name, data) {
+
+        saveActive(true);
+
+        const plan = {
+
+            id: createPlanId(),
+
+            name,
+
+            updatedAt: new Date().toISOString(),
+
+            data: JSON.parse(JSON.stringify(data))
+        };
+
+        store.plans.push(plan);
+
+        if (applyPlan(plan)) {
+
+            /* บันทึกทันที (applyPlan เก็บแค่ activeId) */
+            waitFrames(4, () => saveActive(true));
+
+            showToast(`Import เป็นแผนใหม่ "${name}" แล้ว`);
+        }
+    }
+
+
+    function importReplaceCurrent(data) {
+
+        try {
+
+            window.ZGPlanIO.apply(JSON.parse(JSON.stringify(data)));
+
+        } catch (error) {
+
+            console.error(error);
+
+            showToast("Import ไม่สำเร็จ: ข้อมูลในไฟล์บางส่วนไม่ถูกต้อง", true);
+
+            return;
+        }
+
+        waitFrames(4, () => saveActive(true));
+
+        showToast(`แทนที่แผน "${getActivePlan().name}" ด้วยไฟล์แล้ว`);
+    }
+
+
+    function openImportDialog(data, fileName) {
+
+        const baseName =
+            (typeof data.title === "string" && data.title.trim()) ||
+            String(fileName || "").replace(/\.json$/i, "").trim() ||
+            "แผนจากไฟล์";
+
+        const current = getActivePlan();
+
+        openDialog(`
+            <div class="zg-plan-dialog-title">Import ไฟล์แผน</div>
+
+            <div class="zg-plan-dialog-message">ไฟล์: <b>${escapeText(fileName || "-")}</b></div>
+
+            <div>
+                <label class="zg-plan-dialog-radio">
+                    <input type="radio" name="zgImportMode" value="new" checked>
+                    เพิ่มเป็นแผนใหม่
+                </label>
+                <label class="zg-plan-dialog-radio">
+                    <input type="radio" name="zgImportMode" value="replace">
+                    แทนที่แผนที่เปิดอยู่ (<b>${escapeText(current.name)}</b>)
+                </label>
+            </div>
+
+            <div data-section="name">
+                <div class="zg-plan-dialog-label">ชื่อแผนใหม่</div>
+                <input type="text" maxlength="${NAME_MAX}" value="${escapeText(uniqueName(baseName.slice(0, NAME_MAX)))}">
+            </div>
+
+            <div class="zg-plan-dialog-message" data-section="warn" style="display:none; color:#d33b43">
+                ข้อมูลเดิมของแผนนี้จะถูกแทนที่ทั้งหมด
+            </div>
+
+            <div class="zg-plan-dialog-error"></div>
+
+            <div class="zg-plan-dialog-actions">
+                <button type="button" data-cancel>ยกเลิก</button>
+                <button type="button" class="zg-plan-ok" data-ok>Import</button>
+            </div>
+        `, dialog => {
+
+            const mode =
+                dialog.querySelector('input[name="zgImportMode"]:checked').value;
+
+            if (mode === "replace") {
+
+                importReplaceCurrent(data);
+
+                return;
+            }
+
+            const name = readName(dialog);
+
+            if (!name) {
+                return false;
+            }
+
+            importAsNewPlan(name, data);
+        });
+
+        /* สลับแสดงช่องชื่อ / คำเตือนตามตัวเลือก */
+        const dialog =
+            dialogOverlay && dialogOverlay.querySelector(".zg-plan-dialog");
+
+        if (dialog) {
+
+            const nameSection = dialog.querySelector('[data-section="name"]');
+            const warnSection = dialog.querySelector('[data-section="warn"]');
+            const okBtn = dialog.querySelector("[data-ok]");
+
+            dialog.querySelectorAll('input[name="zgImportMode"]').forEach(radio => {
+
+                radio.addEventListener("change", () => {
+
+                    const replace = radio.value === "replace" && radio.checked;
+
+                    nameSection.style.display = replace ? "none" : "";
+                    warnSection.style.display = replace ? "" : "none";
+
+                    okBtn.className = replace ? "zg-plan-danger" : "zg-plan-ok";
+                });
+            });
+        }
+    }
+
+
+    window.ZGPlans = {
+
+        importData(data, fileName) {
+
+            if (!store) {
+
+                /* ระบบแผนยังไม่พร้อม → แทนที่แผนที่เปิดอยู่แบบเดิม */
+                window.ZGPlanIO.apply(data);
+
+                return;
+            }
+
+            openImportDialog(data, fileName);
+        }
+    };
+
+
+    function openDeleteDialog() {
+
+        if (store.plans.length <= 1) {
+
+            showToast("ต้องมีอย่างน้อย 1 แผน ลบแผนสุดท้ายไม่ได้", true);
+
+            return;
+        }
+
+        const plan = getActivePlan();
+
+        openDialog(`
+            <div class="zg-plan-dialog-title">ลบแผน</div>
+
+            <div class="zg-plan-dialog-message">
+                ต้องการลบแผน <b>"${escapeText(plan.name)}"</b> ใช่ไหม?<br>
+                ลบแล้วกู้คืนไม่ได้ ถ้ายังอยากเก็บไว้ ให้ Export ก่อน
+            </div>
+
+            <div class="zg-plan-dialog-actions">
+                <button type="button" data-cancel>ยกเลิก</button>
+                <button type="button" class="zg-plan-danger" data-ok>ลบแผน</button>
+            </div>
+        `, () => {
+
+            deletePlan(plan.id);
+        });
+    }
+
+
+    /* =====================================================
+       EVENTS
+    ===================================================== */
+
+    /* ถ้าระบบแผนยังไม่พร้อม (io.js ยังไม่โหลด) → แจ้งแทนการเงียบ */
+    function ready() {
+
+        if (store && window.ZGPlanIO) {
+            return true;
+        }
+
+        showToast(
+            window.ZGPlanIO
+                ? "ระบบแผนกำลังโหลด ลองกดอีกครั้ง"
+                : "ระบบแผนใช้ไม่ได้: ไม่พบ io.js ตัวใหม่ (ดูลำดับ <script> ใน index.html)",
+            true
+        );
+
+        return false;
+    }
+
+
+    selectBtn.addEventListener("click", event => {
+
+        event.stopPropagation();
+
+        if (!ready()) {
+            return;
+        }
+
+        if (dropdown) {
+            closeDropdown();
+        } else {
+            openDropdown();
+        }
+    });
+
+    addBtn.addEventListener("click", () => {
+        if (ready()) openAddDialog();
+    });
+
+    renameBtn.addEventListener("click", () => {
+        if (ready()) openRenameDialog();
+    });
+
+    deleteBtn.addEventListener("click", () => {
+        if (ready()) openDeleteDialog();
+    });
+
+
+    document.addEventListener("mousedown", event => {
+
+        if (
+            dropdown &&
+            !dropdown.contains(event.target) &&
+            !event.target.closest("#planSelectBtn")
+        ) {
+            closeDropdown();
+        }
+    });
+
+
+    document.addEventListener("keydown", event => {
+
+        if (event.key === "Escape") {
+
+            closeDropdown();
+            closeDialog();
+        }
+    });
+
+
+    /* =====================================================
+       START
+    ===================================================== */
+
+    function start() {
+
+        if (!window.ZGPlanIO) {
+
+            console.error(
+                "[plans.js] ไม่พบ window.ZGPlanIO — ต้องใช้ io.js ตัวใหม่ และโหลด io.js ก่อน plans.js"
+            );
+
+            return;
+        }
+
+        try {
+
+            localStorage.getItem(STORAGE_KEY);
+
+        } catch (error) {
+
+            storageAvailable = false;
+        }
+
+        store =
+            storageAvailable
+                ? readStore()
+                : null;
+
+        if (store) {
+
+            /* มีแผนเก็บไว้แล้ว → เปิดแผนล่าสุด */
+
+            applyPlan(getActivePlan());
+
+        } else {
+
+            /* ครั้งแรก → เก็บหน้าที่เปิดอยู่เป็นแผนแรก */
+
+            const firstName =
+                (nameEl && nameEl.textContent.trim()) ||
+                DEFAULT_FIRST_NAME;
+
+            const plan = {
+
+                id: createPlanId(),
+
+                name: firstName,
+
+                updatedAt: new Date().toISOString(),
+
+                data: window.ZGPlanIO.build()
+            };
+
+            store = { activeId: plan.id, plans: [plan] };
+
+            writeStore();
+
+            lastSavedKey = snapshotKey(plan.data);
+
+            updateLabel();
+        }
+
+        if (!storageAvailable) {
+
+            showToast(
+                "เบราว์เซอร์นี้ไม่ให้เก็บข้อมูล แผนจะไม่ถูกบันทึกเมื่อปิดหน้า — ควร Export เก็บไว้",
+                true
+            );
+        }
+
+
+        /* บันทึกอัตโนมัติ */
+
+        setInterval(() => saveActive(), AUTOSAVE_MS);
+
+        window.addEventListener("pagehide", () => saveActive());
+
+        document.addEventListener("visibilitychange", () => {
+
+            if (document.visibilityState === "hidden") {
+                saveActive();
+            }
+        });
+    }
+
+
+    /* รอให้ app.js วาดตารางครั้งแรกเสร็จก่อน (app.js ใช้ requestAnimationFrame 2 ชั้น) */
+    waitFrames(4, start);
+
+})();

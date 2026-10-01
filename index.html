@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <script src="responsive.js?v=4"></script>
+ 
+    <title>Property Schedule Plan</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+<!-- =========================================================
+     TOP WORKSPACE TOOLBAR
+========================================================= -->
+
+<nav class="workspace-toolbar">
+
+    <!-- ROW 1 -->
+    <div class="toolbar-row toolbar-row-main">
+
+        <div class="toolbar-group toolbar-group--plan">
+
+            <button
+                type="button"
+                id="planSelectBtn"
+                class="toolbar-control plan-select"
+            >
+                <span class="plan-select-name">แผนตัวอย่าง (Property)</span>
+                <span class="toolbar-caret">⌄</span>
+            </button>
+
+            <button
+                type="button"
+                id="planAddBtn"
+                class="toolbar-square-btn"
+                title="เพิ่มแผน"
+            >
+                ＋
+            </button>
+
+            <button
+                type="button"
+                id="planRenameBtn"
+                class="toolbar-square-btn"
+                title="เปลี่ยนชื่อแผน"
+            >
+                ✎
+            </button>
+
+            <button
+                type="button"
+                id="planDeleteBtn"
+                class="toolbar-square-btn muted-danger"
+                title="ลบแผน"
+            >
+                ♲
+            </button>
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--insert">
+
+            <button type="button" id="addTaskBtn" class="toolbar-control">＋ งาน</button>
+            <button type="button" id="addDateLineBtn" class="toolbar-control">＋ เส้นวันที่</button>
+            <button type="button" id="addHLineBtn" class="toolbar-control">＋ เส้นแนวนอน</button>
+            <button type="button" id="addTextBtn" class="toolbar-control">＋ Text</button>
+            <button type="button" id="manageRolesBtn" class="toolbar-control">⚙ บทบาท</button>
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--date toolbar-date-group">
+
+            <span class="toolbar-label">
+                วันเริ่มต้น
+            </span>
+
+            <input
+                type="date"
+                id="timelineStartInput"
+                class="toolbar-date-input"
+                value="2026-01-06"
+            >
+
+            <span class="toolbar-label">
+                วันสิ้นสุด
+            </span>
+
+            <input
+                type="date"
+                id="timelineEndInput"
+                class="toolbar-date-input"
+                value="2027-03-02"
+            >
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--month">
+
+            <button
+                type="button"
+                id="extendStartBtn"
+                class="toolbar-control compact"
+            >
+                ◀ +1เดือน
+            </button>
+
+            <button
+                type="button"
+                id="shrinkStartBtn"
+                class="toolbar-control compact"
+            >
+                -เดือน
+            </button>
+
+            <button
+                type="button"
+                id="shrinkEndBtn"
+                class="toolbar-control compact"
+            >
+                -เดือน
+            </button>
+
+            <button
+                type="button"
+                id="extendEndBtn"
+                class="toolbar-control compact"
+            >
+                +1เดือน ▶
+            </button>
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--zoom">
+
+            <span class="toolbar-label">
+                ขนาดโดยรวม
+            </span>
+
+            <button
+                type="button"
+                id="zoomOutBtn"
+                class="toolbar-square-btn"
+            >
+                −
+            </button>
+
+            <span
+                id="zoomText"
+                class="toolbar-zoom-text"
+            >
+                100%
+            </span>
+
+            <button
+                type="button"
+                id="zoomInBtn"
+                class="toolbar-square-btn"
+            >
+                ＋
+            </button>
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--print">
+
+            <span class="toolbar-label">
+                พิมพ์ A3
+            </span>
+
+            <button
+                type="button"
+                id="printScaleBtn"
+                class="toolbar-print-scale"
+                title="ตั้งค่าการพิมพ์"
+            >
+                23% • 1 หน้า
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- ROW 2 -->
+    <div class="toolbar-row toolbar-row-secondary">
+
+        <div class="toolbar-group toolbar-group--view">
+
+            <button
+                type="button"
+                id="themeToggleBtn"
+                class="toolbar-square-btn theme-button"
+                title="ธีม"
+            >
+                ◐
+            </button>
+
+            <button
+                type="button"
+                id="langToggleBtn"
+                class="toolbar-control"
+                title="เปลี่ยนภาษา"
+            >
+                🌐 TH
+            </button>
+
+        </div>
+
+        <div class="toolbar-group toolbar-group--print">
+
+            <button
+                type="button"
+                id="printA3Btn"
+                class="toolbar-control"
+            >
+                🖨 พิมพ์ A3
+            </button>
+
+        </div>
+
+        <button type="button" id="exportPlanBtn" class="toolbar-control">↑ Export</button>
+        <button type="button" id="importPlanBtn" class="toolbar-control">↓ Import</button>
+
+        <div class="toolbar-group toolbar-group--more">
+
+            <button
+                type="button"
+                id="toolbarSpellcheckBtn"
+                class="toolbar-control"
+                title="เปิด/ปิด ตรวจคำผิด"
+            >
+                🔎 ตรวจคำผิด
+            </button>
+
+            <!-- app.js ยังต้องใช้ปุ่มนี้ ห้ามลบ แต่ซ่อนไว้ -->
+            <button type="button" id="toolbarMoreBtn" hidden></button>
+
+        </div>
+
+        <div class="toolbar-search">
+
+            <span class="toolbar-search-icon">
+                🔍
+            </span>
+
+            <input
+                type="text"
+                placeholder="ค้นหา/คำสั่ง... (Ctrl+K)"
+                aria-label="ค้นหา"
+            >
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+<!-- =========================================================
+     MAIN PLAN
+========================================================= -->
+
+<main class="plan">
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <header class="plan-header">
+
+        <div class="title-box">
+
+            <img
+                src="logo.png"
+                alt="ZERO GREEN CO., LTD."
+                class="title-logo"
+            >
+
+            <div class="title-text">
+
+                <div
+                    class="title editable-text"
+                    contenteditable="true"
+                    spellcheck="false"
+                >
+                    Property schedule plan
+                </div>
+
+                <div
+                    class="subtitle editable-text"
+                    contenteditable="true"
+                    spellcheck="false"
+                >
+                    title
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="header-green-line"></div>
+
+    </header>
+
+
+    <!-- =====================================================
+         CATEGORY TOOLBAR
+    ====================================================== -->
+
+    <div class="category-toolbar">
+
+        <button
+            type="button"
+            id="addCategoryBtn"
+            class="add-category-btn"
+        >
+            <span>＋</span>
+            หมวดหมู่
+        </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         TIMELINE HEADER (เดือน / วันที่)
+         อยู่นอกกรอบตาราง (schedule-area)
+    ====================================================== -->
+
+    <div
+        class="timeline-header"
+        id="timelineHeader"
+    >
+
+        <div class="timeline-header-clip">
+
+            <div
+                class="timeline-header-inner"
+                id="timelineHeaderInner"
+            ></div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         MAIN SCHEDULE
+    ====================================================== -->
+
+    <section
+        class="schedule-area"
+        id="scheduleArea"
+    >
+
+        <!-- CATEGORY -->
+
+        <aside
+            class="category-sidebar"
+            id="categorySidebar"
+        ></aside>
+
+
+        <!-- PARTY -->
+
+        <aside
+            class="party-sidebar"
+            id="partySidebar"
+        ></aside>
+
+
+        <!-- TIMELINE -->
+
+        <div
+            class="timeline-viewport"
+            id="timelineViewport"
+        >
+
+            <div
+                class="timeline-content"
+                id="timelineContent"
+            >
+
+                <div
+                    class="schedule-grid"
+                    id="scheduleGrid"
+                ></div>
+
+            </div>
+
+        </div>
+
+
+        <!-- VERTICAL CATEGORY SCROLL -->
+
+        <div
+            class="category-scrollbar"
+            id="categoryScrollbar"
+        >
+
+            <input
+                type="range"
+                id="categoryScrollRange"
+                class="category-scroll-range"
+                min="0"
+                max="0"
+                value="0"
+                step="1"
+                aria-label="เลื่อนหมวดหมู่"
+            >
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         OBJECT LAYER (ข้อ 1/3 — ย้ายออกมานอก schedule-area
+         เพื่อให้ลาก/วางทับตารางได้แบบไม่ถูกตัดขอบ)
+    ====================================================== -->
+
+    <div
+        class="object-layer-viewport"
+        id="objectLayerViewport"
+    >
+        <div
+            class="object-layer"
+            id="objectLayer"
+        ></div>
+    </div>
+
+
+<!-- ★ เพิ่มใหม่: เลเยอร์เส้นแนวนอน ไม่ถูก clip วางทับได้ทั้งตาราง -->
+    <div class="hline-layer-viewport" id="hlineLayerViewport">
+
+        <div
+            class="hline-layer"
+            id="hlineLayer"
+        ></div>
+
+    </div>
+
+
+    <!-- =====================================================
+         MAIN HORIZONTAL SLIDER
+    ====================================================== -->
+
+    <div class="timeline-horizontal-scroll">
+
+        <button
+            type="button"
+            id="scrollTimelineLeft"
+            class="horizontal-arrow"
+            title="เลื่อนตารางไปทางซ้าย"
+        >
+            ◀
+        </button>
+
+        <input
+            type="range"
+            id="timelineHorizontalRange"
+            class="horizontal-range"
+            min="0"
+            max="0"
+            value="0"
+            step="1"
+            aria-label="เลื่อนตารางซ้ายขวา"
+        >
+
+        <button
+            type="button"
+            id="scrollTimelineRight"
+            class="horizontal-arrow"
+            title="เลื่อนตารางไปทางขวา"
+        >
+            ▶
+        </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         DATE / BRACKET
+    ====================================================== -->
+
+    <section
+        class="bracket-area"
+        id="bracketArea"
+    >
+
+        <div class="bracket-label">
+            เส้นวันที่ / Bracket
+        </div>
+
+        <div
+            class="bracket-viewport"
+            id="bracketViewport"
+        >
+
+            <div
+                class="bracket-content"
+                id="bracketContent"
+            >
+
+                <div class="bracket-guide-line"></div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         BOARD NOTES
+    ====================================================== -->
+
+    <section
+        class="board-notes-section"
+        id="boardNotesSection"
+    >
+
+        <div
+            class="notes-viewport"
+            id="notesViewport"
+        >
+
+            <div
+                class="notes-track"
+                id="notesTrack"
+            ></div>
+
+        </div>
+
+
+        <div class="notes-scrollbar">
+
+            <input
+                type="range"
+                id="notesHorizontalRange"
+                class="horizontal-range"
+                min="0"
+                max="0"
+                value="0"
+                step="1"
+                aria-label="เลื่อนบันทึกท้ายกระดาน"
+            >
+
+        </div>
+
+
+        <button
+            type="button"
+            id="addNoteBtn"
+            class="add-note-btn"
+        >
+            ＋ เพิ่มบันทึกท้ายกระดาน
+        </button>
+
+    </section>
+
+
+    <!-- =====================================================
+         RESERVED FOOTER SPACE
+    ====================================================== -->
+
+    <div class="footer-reserved-space"></div>
+
+</main>
+
+    <!-- =========================================================
+         CATEGORY MENU
+         (ข้อ 10 — เดิมมี div id="categoryMenu" ซ้ำกัน 2 อัน
+         ทำให้ document.getElementById ไปเจอตัวที่ว่างเปล่าก่อน
+         ปุ่มลบหมวดหมู่/เปลี่ยนสีเลยหายไป — แก้โดยเหลือแค่อันเดียว)
+    ========================================================= -->
+
+<div
+    id="categoryMenu"
+    class="category-menu"
+>
+
+    <div class="menu-title">
+        ตั้งค่าหมวดหมู่
+    </div>
+
+
+    <label class="menu-color-row">
+
+        <span>
+            สีหมวดหมู่
+        </span>
+
+        <input
+            type="color"
+            id="categoryColorPicker"
+        >
+
+    </label>
+
+
+    <button
+        type="button"
+        id="deleteCategoryBtn"
+        class="delete-category-btn"
+    >
+        ลบหมวดหมู่
+    </button>
+
+</div>
+
+
+<!-- =========================================================
+     TOOLBAR MORE MENU
+========================================================= -->
+
+<div
+    id="toolbarMoreMenu"
+    class="toolbar-more-menu"
+></div>
+
+
+<!-- =========================================================
+     ROLE MANAGER PANEL
+========================================================= -->
+
+<div
+    id="roleManagerPanel"
+    class="role-manager-panel"
+>
+
+    <div class="role-manager-header">
+
+        <span>
+            จัดการบทบาท
+        </span>
+
+        <button
+            type="button"
+            id="closeRoleManagerBtn"
+            class="role-manager-close"
+        >
+            ✕
+        </button>
+
+    </div>
+
+
+    <div
+        id="roleManagerList"
+        class="role-manager-list"
+    ></div>
+
+
+    <button
+        type="button"
+        id="addRoleBtn"
+        class="role-manager-add-btn"
+    >
+        ＋ เพิ่มบทบาท
+    </button>
+
+</div>
+
+
+<!-- =========================================================
+     BOTTOM AUTO-HIDE COMPANY BAR
+========================================================= -->
+
+<div
+    id="bottomHotZone"
+    class="bottom-hot-zone"
+></div>
+
+
+<footer
+    id="companyFooter"
+    class="company-footer"
+>
+
+    <div class="company-footer-inner">
+
+        <div class="footer-logo-area">
+
+            <img
+                src="logo.png"
+                alt="ZERO GREEN CO., LTD."
+                class="footer-logo"
+            >
+
+        </div>
+
+
+        <div class="footer-separator"></div>
+
+
+        <div class="footer-contact">
+
+            <span>
+                TEL 02-671-3065,
+                087-086-6098 (日本語),
+                064-984-3510 (Thai)
+            </span>
+
+            <span class="footer-contact-separator">
+                |
+            </span>
+
+            <span>
+                E-MAIL : thaikoujyo@gmail.com
+            </span>
+
+        </div>
+
+    </div>
+
+</footer>
+
+
+<script src="line.js"></script>
+<script src="app.js"></script>
+<script src="text.js"></script>
+<script src="zoom-sync.js"></script>
+<script src="update-date.js"></script>
+<script src="io.js?v=3"></script>
+<script src="plans.js?v=3"></script>
+<script src="history.js? v=2"></script>
+<script src="theme.js"></script>
+<script src="export-image.js"></script>
+<script src="print-a3.js"></script>
+<script src="spellcheck.js"></script>
+<script src="search.js?v=2"></script>
+<script src="lang.js?v=7"></script>
+
+</body>
+</html>
