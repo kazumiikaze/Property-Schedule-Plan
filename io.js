@@ -368,6 +368,12 @@
 
     function importPlanFile(file) {
 
+        /* กันเลือก "ไฟล์ทั้งหมด" แล้วเลือกไฟล์อื่นมา */
+        if (!/\.json$/i.test(file.name || "")) {
+            alert("กรุณาเลือกไฟล์แผนนามสกุล .json เท่านั้น");
+            return;
+        }
+
         const reader =
             new FileReader();
 
@@ -425,7 +431,8 @@
 
     fileInput.type = "file";
 
-    fileInput.accept = ".json,application/json";
+    /* แสดงเฉพาะไฟล์ .json ในหน้าต่างเลือกไฟล์ */
+    fileInput.accept = ".json";
 
     fileInput.style.display = "none";
 

@@ -3546,7 +3546,7 @@ function openObjectMenu(
 
         ${role ? `
         <div class="object-menu-section">
-            <label class="object-menu-label">บทบาท (Role)</label>
+            <label class="object-menu-label">สถานะ</label>
             <select class="object-menu-select" id="objMenuRoleSelect">
                 ${objectRoles.map(roleOption => `
                     <option value="${roleOption.id}" ${roleOption.id === object.roleId ? "selected" : ""}>${roleOption.name}</option>
@@ -4381,7 +4381,7 @@ addRoleBtn.addEventListener(
                 createRoleId(),
 
             name:
-                "บทบาทใหม่",
+                "สถานะใหม่",
 
             color:
                 DEFAULT_ROLE_COLORS[

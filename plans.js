@@ -61,11 +61,12 @@
     style.textContent = `
 .zg-plan-dropdown {
     position: fixed;
-    min-width: 240px;
-    max-width: 340px;
-    max-height: 60vh;
-    overflow-y: auto;
+    width: 300px;
+    max-width: calc(100vw - 12px);
+    display: flex;
+    flex-direction: column;
     padding: 6px;
+    box-sizing: border-box;
     background: #ffffff;
     border: 1px solid #d5dad7;
     border-radius: 10px;
@@ -73,6 +74,90 @@
     z-index: 26000;
     font-size: 12px;
 }
+.zg-plan-search {
+    position: relative;
+    margin: 0 0 6px;
+}
+.zg-plan-search-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    opacity: .6;
+    pointer-events: none;
+}
+.zg-plan-search-input {
+    width: 100%;
+    height: 30px;
+    box-sizing: border-box;
+    padding: 0 28px 0 28px;
+    border: 1px solid #dde3e0;
+    border-radius: 7px;
+    background: #f7f9f8;
+    font-family: inherit;
+    font-size: 12px;
+    color: inherit;
+    outline: none;
+}
+.zg-plan-search-input:focus { border-color: #8cc79c; background: #ffffff; }
+.zg-plan-search-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #8a938d;
+    cursor: pointer;
+    display: none;
+}
+.zg-plan-search.has-text .zg-plan-search-clear { display: block; }
+.zg-plan-search-clear:hover { background: #eef1ef; }
+.zg-plan-list {
+    /* แสดงสูงสุด 5 แผน เกินนี้เลื่อนดู */
+    max-height: calc(5 * 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.zg-plan-list .zg-plan-item { min-height: 46px; margin-bottom: 2px; }
+.zg-plan-list .zg-plan-item[hidden] { display: none; }
+.zg-plan-empty {
+    padding: 14px 10px;
+    color: #8a938d;
+    text-align: center;
+}
+.zg-plan-count {
+    padding: 2px 10px 0;
+    color: #8a938d;
+    font-size: 10px;
+}
+.zg-plan-dropdown-footer {
+    display: flex;
+    gap: 4px;
+}
+.zg-plan-dropdown-footer .zg-plan-dropdown-add { flex: 1; }
+.zg-plan-dropdown-import {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    border: 1px solid #dde3e0;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #3d4541;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.zg-plan-dropdown-import:hover { background: #f0f4f2; }
+body.zg-dark .zg-plan-search-input { background: #2b3330; border-color: #3a4440; }
+body.zg-dark .zg-plan-search-clear:hover { background: #33413a; }
+body.zg-dark .zg-plan-dropdown-import { background: #2b3330; border-color: #3a4440; color: #e3e9e5; }
+body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 .zg-plan-item {
     width: 100%;
     display: flex;
@@ -677,6 +762,12 @@
             store.plans.slice();
 
         menu.innerHTML = `
+            <div class="zg-plan-search">
+                <span class="zg-plan-search-icon">🔍</span>
+                <input type="text" class="zg-plan-search-input" placeholder="ค้นหาชื่อแผน..." aria-label="ค้นหาชื่อแผน">
+                <button type="button" class="zg-plan-search-clear" title="ล้างคำค้นหา">✕</button>
+            </div>
+            <div class="zg-plan-list">
             ${sorted.map(plan => `
                 <button type="button"
                     class="zg-plan-item ${plan.id === store.activeId ? "active" : ""}"
@@ -688,9 +779,77 @@
                     </span>
                 </button>
             `).join("")}
+                <div class="zg-plan-empty" hidden>ไม่พบแผนที่ค้นหา</div>
+            </div>
+            <div class="zg-plan-count" hidden></div>
             <div class="zg-plan-dropdown-sep"></div>
-            <button type="button" class="zg-plan-dropdown-add">＋ เพิ่มแผนใหม่</button>
+            <div class="zg-plan-dropdown-footer">
+                <button type="button" class="zg-plan-dropdown-add">＋ เพิ่มแผนใหม่</button>
+                <button type="button" class="zg-plan-dropdown-import" title="Import ไฟล์แผน (.json)">↓ Import .json</button>
+            </div>
         `;
+
+        const searchBox = menu.querySelector(".zg-plan-search");
+        const searchInput = menu.querySelector(".zg-plan-search-input");
+        const emptyNote = menu.querySelector(".zg-plan-empty");
+        const countNote = menu.querySelector(".zg-plan-count");
+        const items = Array.from(menu.querySelectorAll(".zg-plan-item"));
+
+        function applySearch() {
+
+            const query = searchInput.value.trim().toLowerCase();
+
+            let shown = 0;
+
+            items.forEach(item => {
+
+                const name = (item.querySelector(".zg-plan-item-name").textContent || "").toLowerCase();
+
+                const visible = !query || name.includes(query);
+
+                item.hidden = !visible;
+
+                if (visible) shown += 1;
+            });
+
+            searchBox.classList.toggle("has-text", Boolean(query));
+
+            emptyNote.hidden = shown > 0;
+
+            countNote.hidden = !query || shown === 0;
+            countNote.textContent = query ? `พบ ${shown} จาก ${items.length} แผน` : "";
+        }
+
+        searchInput.addEventListener("input", applySearch);
+
+        searchInput.addEventListener("keydown", event => {
+
+            if (event.key === "Enter") {
+
+                event.preventDefault();
+
+                const first = items.find(item => !item.hidden);
+
+                if (first) {
+                    closeDropdown();
+                    switchToPlan(first.dataset.planId);
+                }
+            }
+
+            if (event.key === "Escape") {
+                event.stopPropagation();
+                closeDropdown();
+            }
+        });
+
+        menu.querySelector(".zg-plan-search-clear").addEventListener("click", event => {
+
+            event.stopPropagation();
+
+            searchInput.value = "";
+            applySearch();
+            searchInput.focus();
+        });
 
         menu.addEventListener("click", event => {
 
@@ -711,6 +870,20 @@
                 closeDropdown();
 
                 openAddDialog();
+
+                return;
+            }
+
+            if (event.target.closest(".zg-plan-dropdown-import")) {
+
+                closeDropdown();
+
+                /* เลือกไฟล์ .json → ถามว่าสร้างเป็นแผนใหม่ หรือแทนที่แผนปัจจุบัน */
+                if (window.ZGPlanIO && typeof window.ZGPlanIO.importFile === "function") {
+                    window.ZGPlanIO.importFile();
+                } else {
+                    showToast("ไม่พบระบบ Import (io.js)", true);
+                }
             }
         });
 
@@ -726,6 +899,15 @@
             `${rect.bottom + 6}px`;
 
         dropdown = menu;
+
+        /* ให้เห็นแผนที่เปิดอยู่ในรายการ แล้วโฟกัสช่องค้นหา */
+        const activeItem = menu.querySelector(".zg-plan-item.active");
+
+        if (activeItem) {
+            activeItem.scrollIntoView({ block: "nearest" });
+        }
+
+        searchInput.focus();
     }
 
 
@@ -923,7 +1105,7 @@
        IMPORT .json → เลือก เพิ่มเป็นแผนใหม่ / แทนที่แผนที่เปิดอยู่
     ===================================================== */
 
-    function importAsNewPlan(name, data) {
+    function importAsNewPlan(name, data, message) {
 
         saveActive(true);
 
@@ -945,7 +1127,7 @@
             /* บันทึกทันที (applyPlan เก็บแค่ activeId) */
             waitFrames(4, () => saveActive(true));
 
-            showToast(`Import เป็นแผนใหม่ "${name}" แล้ว`);
+            showToast(message || `Import เป็นแผนใหม่ "${name}" แล้ว`);
         }
     }
 
@@ -1071,6 +1253,35 @@
             }
 
             openImportDialog(data, fileName);
+        },
+
+        /* สร้างแผนใหม่จากข้อมูล (ใช้โดย templates.js) */
+        createFromData(name, data, message) {
+
+            if (!store) {
+                window.ZGPlanIO.apply(data);
+                return;
+            }
+
+            importAsNewPlan(uniqueName(name || "แผนใหม่"), data, message);
+        },
+
+        /* แทนที่แผนที่เปิดอยู่ด้วยข้อมูล (ใช้โดย templates.js) */
+        replaceCurrent(data) {
+
+            if (!store) {
+                window.ZGPlanIO.apply(data);
+                return;
+            }
+
+            importReplaceCurrent(data);
+        },
+
+        currentName() {
+
+            const plan = store ? getActivePlan() : null;
+
+            return plan ? plan.name : "";
         }
     };
 
