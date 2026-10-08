@@ -5,7 +5,7 @@
    ปุ่ม "📋 เทมเพลต" ข้างช่องค้นหา/คำสั่ง
    - ใช้เทมเพลต         : สร้างแผนใหม่จากเทมเพลต (หรือแทนที่แผนปัจจุบัน)
    - บันทึกเป็นเทมเพลต   : ตั้งชื่อ → เก็บหน้าตาแผนที่เปิดอยู่ทั้งหมด
-   - Export เทมเพลต     : ดาวน์โหลดเป็นไฟล์ .json (ทั้งหมด หรือทีละอัน ⬇)
+   - Export เทมเพลต     : ดาวน์โหลดเป็นไฟล์ .json (ทั้งหมด หรือทีละอัน ⬆)
    - Import เทมเพลต     : เลือกไฟล์ .json ที่ Export มา → ใช้ที่เครื่องอื่นได้ทันที
                           (ใช้ไฟล์แผน .json ปกติก็ได้ → บันทึกเป็นเทมเพลตให้)
 
@@ -64,9 +64,79 @@
         }
     }
 
+    /* เทมเพลตพร้อมใช้ที่ผู้ใช้ลบ (ซ่อน) ไว้ในเครื่องนี้ */
+    const HIDDEN_KEY = "zg-property-schedule-templates-hidden-v1";
+
+    function readHidden() {
+
+        try {
+            const list = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
+            return Array.isArray(list) ? list : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function writeHidden(list) {
+
+        try {
+            localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(new Set(list))));
+        } catch (error) { /* ignore */ }
+    }
+
+    function allBuiltins() {
+
+        return Array.isArray(window.ZG_TEMPLATES)
+            ? window.ZG_TEMPLATES.filter(item => item && item.id && item.data)
+            : [];
+    }
+
+    /* เทมเพลตพร้อมใช้ที่ติดมากับเว็บ (templates-data.js → window.ZG_TEMPLATES) */
+    function builtinTemplates() {
+
+        const hidden = new Set(readHidden());
+
+        return allBuiltins()
+            .filter(item => !hidden.has(item.id))
+            .map(item => ({ ...item, builtin: true }));
+    }
+
+    function hiddenBuiltinCount() {
+
+        const ids = new Set(allBuiltins().map(item => item.id));
+
+        return readHidden().filter(id => ids.has(id)).length;
+    }
+
+    /*
+        v6: เทมเพลตที่บันทึกในเครื่อง (ล่าสุด) แทนที่เทมเพลตพร้อมใช้ / จากโฟลเดอร์ ที่ชื่อหรือ id เดียวกัน
+        → Export ได้ข้อมูลล่าสุด ไม่ใช่ไฟล์เดิม
+    */
     function allTemplates() {
 
-        return readLocal();
+        const local = readLocal();
+
+        const builtins = builtinTemplates();
+
+        const time = item => {
+            const value = Date.parse(item && item.createdAt);
+            return Number.isFinite(value) ? value : 0;
+        };
+
+        const stale = new Set();
+
+        /* v8: อันไหนใหม่กว่า (วันที่บันทึก/Export) ใช้อันนั้น — ไฟล์ในโฟลเดอร์ที่ใหม่กว่า ชนะของเก่าในเครื่อง */
+        const merged = builtins.map(item => {
+            const override = local.find(entry => entry.id === item.id) || local.find(entry => entry.name === item.name);
+            if (!override) return item;
+            if (time(override) >= time(item)) return { ...override, edited: true };
+            stale.add(override.id);
+            return item;
+        });
+
+        const used = new Set(merged.map(item => item.id));
+
+        return [...merged, ...local.filter(item => !used.has(item.id) && !stale.has(item.id))];
     }
 
     function createId() {
@@ -226,6 +296,8 @@
 .zg-tpl-download:hover { background: #f0f4f2; }
 .zg-tpl-io { display: flex; gap: 4px; }
 .zg-tpl-io .zg-tpl-download { flex: 1; text-align: center; }
+.zg-tpl-restore { padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: #6f7873; font-family: inherit; font-size: 11px; font-weight: 600; text-align: left; cursor: pointer; }
+.zg-tpl-restore:hover { background: #f0f4f2; }
 .zg-tpl-hint { padding: 0 4px 2px; color: #8a938d; font-size: 10px; line-height: 1.4; }
 
 .zg-tpl-overlay {
@@ -436,7 +508,7 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
             </div>
             <div class="zg-tpl-dialog-note">
                 เก็บหน้าตาแผนที่เปิดอยู่ทั้งหมด (หมวดหมู่ แถว สี object ข้อความ บันทึก ช่วงวันที่)
-                ไว้ในเบราว์เซอร์นี้ — ถ้าจะใช้ที่เครื่องอื่น ให้กด "⬇ Export เทมเพลต" แล้วไป Import ที่เครื่องนั้น
+                ไว้ในเบราว์เซอร์นี้ — ถ้าจะใช้ที่เครื่องอื่น ให้กด "⬆ Export เทมเพลต" แล้วไป Import ที่เครื่องนั้น
             </div>
             <div class="zg-tpl-dialog-actions">
                 <button type="button" class="zg-tpl-cancel">ยกเลิก</button>
@@ -453,6 +525,7 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
 
             const exists = allTemplates().find(item => item.name === name);
 
+            /* ชื่อซ้ำ → บันทึกทับ (ชื่อซ้ำกับเทมเพลตพร้อมใช้ = ใช้ id เดิม → แทนที่ในรายการ) */
             const template = {
                 id: exists ? exists.id : createId(),
                 name,
@@ -545,22 +618,33 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
 
         closeMenu();
 
+        const isBuiltin = Boolean(template.builtin);
+
         openDialog(`
             <div class="zg-tpl-dialog-title">ลบเทมเพลต</div>
-            <div>ลบเทมเพลต "${escapeText(template.name)}" ใช่ไหม?</div>
+            <div>ต้องการลบเทมเพลต <b>"${escapeText(template.name)}"</b> ใช่ไหม?</div>
+            <div class="zg-tpl-dialog-note">
+                ${isBuiltin
+                    ? "เป็นเทมเพลตพร้อมใช้ที่ติดมากับเว็บ — จะถูกซ่อนจากเครื่องนี้ กดกู้คืนได้ภายหลังที่ท้ายเมนูเทมเพลต"
+                    : "ลบแล้วกู้คืนไม่ได้ ถ้ายังอยากเก็บไว้ ให้กด ⬆ Export ก่อน"}
+            </div>
             <div class="zg-tpl-dialog-actions">
                 <button type="button" class="zg-tpl-cancel">ยกเลิก</button>
-                <button type="button" class="zg-tpl-danger">ลบ</button>
+                <button type="button" class="zg-tpl-danger">ลบเทมเพลต</button>
             </div>
         `, () => {
 
-            writeLocal(readLocal().filter(item => item.id !== template.id));
+            if (isBuiltin) {
+                writeHidden([...readHidden(), template.id]);
+            } else {
+                writeLocal(readLocal().filter(item => item.id !== template.id));
+            }
 
             closeDialog();
 
             toast(`ลบเทมเพลต "${template.name}" แล้ว`);
 
-        }, ".zg-tpl-danger");
+        }, ".zg-tpl-cancel");
     }
 
 
@@ -619,6 +703,144 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
         toast(list.length === 1
             ? `Export เทมเพลต "${list[0].name}" แล้ว`
             : `Export เทมเพลต ${list.length} อันแล้ว`);
+    }
+
+
+    /*
+        v7: กด ⬆ ที่เทมเพลต → เลือกได้ว่าจะ Export
+          · แผนที่เปิดอยู่ตอนนี้ (ล่าสุด) + บันทึกทับเทมเพลตนี้ในเครื่องด้วย   ← ค่าเริ่มต้น
+          · ตามที่บันทึกไว้ (ข้อมูล ณ วันที่บันทึกเทมเพลต)
+        เดิม Export ได้แต่ข้อมูลตอนบันทึกเทมเพลต → แก้แผนแล้ว Export ก็ได้ไฟล์เดิม
+    */
+    function openExportDialog(template) {
+
+        closeMenu();
+
+        const planName =
+            (window.ZGPlans && window.ZGPlans.currentName && window.ZGPlans.currentName()) || "แผนที่เปิดอยู่";
+
+        openDialog(`
+            <div class="zg-tpl-dialog-title">Export เทมเพลต "${escapeText(template.name)}"</div>
+            <div class="zg-tpl-dialog-choices">
+                <label><input type="radio" name="zgTplExport" value="current" checked>
+                    ใช้แผนที่เปิดอยู่ตอนนี้ (ล่าสุด) — "${escapeText(planName)}"</label>
+                <label><input type="radio" name="zgTplExport" value="saved">
+                    ตามที่บันทึกไว้ (${escapeText(summary(template.data))}${template.createdAt ? " · " + escapeText(formatDate(template.createdAt)) : ""})</label>
+            </div>
+            <div class="zg-tpl-dialog-note">
+                แบบ "ล่าสุด" จะบันทึกทับเทมเพลตนี้ในเครื่องด้วย —
+                ถ้าจะให้ทุกเครื่องเห็น: เอาไฟล์ที่ได้ไปวางทับ templates/template1.json (เลขเดิม) แล้ว push
+            </div>
+            <div class="zg-tpl-dialog-actions">
+                <button type="button" class="zg-tpl-cancel">ยกเลิก</button>
+                <button type="button" class="zg-tpl-ok">⬆ Export</button>
+            </div>
+        `, dialog => {
+
+            const mode = dialog.querySelector("input[name='zgTplExport']:checked").value;
+
+            closeDialog();
+
+            if (mode === "saved") {
+                exportTemplates([template], `template-${template.name}`);
+                return;
+            }
+
+            const updated = {
+                id: template.id,
+                name: template.name,
+                createdAt: new Date().toISOString(),
+                data: currentPlanData()
+            };
+
+            const local = readLocal().filter(item => item.id !== updated.id && item.name !== updated.name);
+
+            local.push(updated);
+
+            writeLocal(local);
+
+            exportTemplates([updated], `template-${template.name}`);
+        }, "input[name='zgTplExport']:checked");
+    }
+
+
+    /*
+        v8: ปุ่มใหญ่ "⬆ Export เทมเพลต (.json)" → เลือกได้
+          · แผนที่เปิดอยู่ตอนนี้ (ล่าสุด) เป็นเทมเพลตชื่อ ... (ชื่อซ้ำ = ทับเทมเพลตเดิม)  ← ค่าเริ่มต้น
+          · เทมเพลตทั้งหมดตามที่บันทึกไว้
+    */
+    function openExportAllDialog(list) {
+
+        closeMenu();
+
+        const planName =
+            (window.ZGPlans && window.ZGPlans.currentName && window.ZGPlans.currentName()) || "เทมเพลตใหม่";
+
+        const suggested = list.length === 1 ? list[0].name : planName;
+
+        openDialog(`
+            <div class="zg-tpl-dialog-title">Export เทมเพลต (.json)</div>
+            <div class="zg-tpl-dialog-choices">
+                <label><input type="radio" name="zgTplExportAll" value="current" checked>
+                    แผนที่เปิดอยู่ตอนนี้ (ล่าสุด)</label>
+            </div>
+            <div>
+                <div class="zg-tpl-dialog-label">ชื่อเทมเพลต (ชื่อซ้ำ = บันทึกทับเทมเพลตเดิม)</div>
+                <input type="text" class="zg-tpl-name" maxlength="80" value="${escapeText(suggested)}" list="zgTplNameList">
+                <datalist id="zgTplNameList">${list.map(item => `<option value="${escapeText(item.name)}">`).join("")}</datalist>
+            </div>
+            <div class="zg-tpl-dialog-choices">
+                <label><input type="radio" name="zgTplExportAll" value="saved" ${list.length ? "" : "disabled"}>
+                    เทมเพลตทั้งหมดตามที่บันทึกไว้ (${list.length} อัน)</label>
+            </div>
+            <div class="zg-tpl-dialog-note">
+                ไฟล์ที่ได้ → วางทับ templates/template1.json (เลขเดิมของเทมเพลตนั้น) แล้ว push
+            </div>
+            <div class="zg-tpl-dialog-actions">
+                <button type="button" class="zg-tpl-cancel">ยกเลิก</button>
+                <button type="button" class="zg-tpl-ok">⬆ Export</button>
+            </div>
+        `, dialog => {
+
+            const mode = dialog.querySelector("input[name='zgTplExportAll']:checked").value;
+
+            if (mode === "saved") {
+                closeDialog();
+                exportTemplates(list, "templates");
+                return;
+            }
+
+            const nameInput = dialog.querySelector(".zg-tpl-name");
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                nameInput.focus();
+                return;
+            }
+
+            closeDialog();
+
+            const exists = allTemplates().find(item => item.name === name);
+
+            const updated = {
+                id: exists ? exists.id : createId(),
+                name,
+                createdAt: new Date().toISOString(),
+                data: currentPlanData()
+            };
+
+            writeLocal(readLocal().filter(item => item.id !== updated.id && item.name !== updated.name).concat([updated]));
+
+            exportTemplates([updated], `template-${name}`);
+        });
+
+        const nameInput = overlay && overlay.querySelector(".zg-tpl-name");
+        if (nameInput) {
+            nameInput.addEventListener("focus", () => {
+                const radio = overlay.querySelector("input[name='zgTplExportAll'][value='current']");
+                if (radio) radio.checked = true;
+            });
+        }
     }
 
 
@@ -780,10 +1002,10 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
                 ${list.length ? list.map(item => `
                     <div class="zg-tpl-item" data-id="${escapeText(item.id)}" title="ใช้เทมเพลตนี้">
                         <div class="zg-tpl-item-text">
-                            <span class="zg-tpl-item-name">${escapeText(item.name)}</span>
+                            <span class="zg-tpl-item-name">${escapeText(item.name)}${item.builtin ? '<span class="zg-tpl-badge zg-tpl-badge--code">พร้อมใช้</span>' : item.edited ? '<span class="zg-tpl-badge zg-tpl-badge--code">แก้ไขแล้ว</span>' : ""}</span>
                             <span class="zg-tpl-item-meta">${escapeText(summary(item.data))}${item.createdAt ? " · " + escapeText(formatDate(item.createdAt)) : ""}</span>
                         </div>
-                        <button type="button" class="zg-tpl-icon-btn" data-action="export" title="Export เทมเพลตนี้ (.json)">⬇</button>
+                        <button type="button" class="zg-tpl-icon-btn" data-action="export" title="Export เทมเพลตนี้ (.json)">⬆</button>
                         <button type="button" class="zg-tpl-icon-btn zg-tpl-icon-btn--danger" data-action="delete" title="ลบเทมเพลต">🗑</button>
                     </div>
                 `).join("") : `<div class="zg-tpl-empty">ยังไม่มีเทมเพลต<br>จัดแผนให้เรียบร้อย แล้วกด "บันทึกแผนนี้เป็นเทมเพลต"<br>หรือ Import ไฟล์เทมเพลต .json</div>`}
@@ -792,9 +1014,10 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
             <div class="zg-tpl-footer">
                 <button type="button" class="zg-tpl-save">＋ บันทึกแผนนี้เป็นเทมเพลต</button>
                 <div class="zg-tpl-io">
-                    <button type="button" class="zg-tpl-download" data-action="export-all">⬇ Export เทมเพลต (.json)</button>
-                    <button type="button" class="zg-tpl-download" data-action="import">⬆ Import เทมเพลต (.json)</button>
+                    <button type="button" class="zg-tpl-download" data-action="export-all">⬆ Export เทมเพลต (.json)</button>
+                    <button type="button" class="zg-tpl-download" data-action="import">⬇ Import เทมเพลต (.json)</button>
                 </div>
+                ${hiddenBuiltinCount() ? `<button type="button" class="zg-tpl-restore" data-action="restore">↺ กู้คืนเทมเพลตพร้อมใช้ที่ลบไป (${hiddenBuiltinCount()})</button>` : ""}
                 <div class="zg-tpl-hint">ย้ายไปใช้เครื่องอื่น: Export ไฟล์ .json แล้วกด Import ที่เครื่องนั้น</div>
             </div>
         `;
@@ -812,7 +1035,7 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
                 if (event.target.closest("[data-action='delete']")) {
                     openDeleteDialog(template);
                 } else if (event.target.closest("[data-action='export']")) {
-                    exportTemplates([template], `template-${template.name}`);
+                    openExportDialog(template);
                 } else {
                     openUseDialog(template);
                 }
@@ -826,7 +1049,14 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
             }
 
             if (event.target.closest("[data-action='export-all']")) {
-                exportTemplates(list, "templates");
+                openExportAllDialog(list);
+                return;
+            }
+
+            if (event.target.closest("[data-action='restore']")) {
+                writeHidden([]);
+                toast("กู้คืนเทมเพลตพร้อมใช้แล้ว");
+                openMenu();
                 return;
             }
 

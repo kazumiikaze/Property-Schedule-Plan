@@ -358,6 +358,11 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
 
     let browserZoom = 1;
 
+    /* toolbar ตามซูมเบราว์เซอร์กี่ส่วน (0 = ขนาดคงที่, 1 = ใหญ่ตามเต็มที่) */
+    const TOOLBAR_ZOOM_FOLLOW = 0.5;
+    const TOOLBAR_ZOOM_MIN = 0.8;
+    const TOOLBAR_ZOOM_MAX = 1.6;
+
 
     /*
         toolbar:
@@ -374,8 +379,15 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
 
         browserZoom = detectBrowserZoom();
 
+        /*
+            ซูมเบราว์เซอร์ → toolbar โตตามแค่ครึ่งเดียวของกระดาน (ไม่ค้างเล็กเท่าเดิม
+            จนดูไม่เข้ากับหน้า และไม่ใหญ่จนกินพื้นที่) เช่น ซูม 150% → toolbar 125%
+        */
+        const toolbarScale =
+            Math.min(TOOLBAR_ZOOM_MAX, Math.max(TOOLBAR_ZOOM_MIN, 1 + (browserZoom - 1) * TOOLBAR_ZOOM_FOLLOW));
+
         toolbar.style.zoom =
-            browserZoom === 1 ? "" : String(1 / browserZoom);
+            browserZoom === 1 ? "" : String(toolbarScale / browserZoom);
 
         root.classList.toggle("zg-browser-zoomed", browserZoom !== 1);
 
@@ -388,8 +400,25 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
         const baseHeight =
             parseFloat(getComputedStyle(root).getPropertyValue("--toolbar-height")) || 76;
 
-        const overflow =
+        let overflow =
             toolbar.scrollWidth > toolbar.clientWidth + 2;
+
+        /* ใหญ่จนล้นจอ → ลดขนาด toolbar ลงให้พอดีแถวเดียวก่อน (ไม่เล็กกว่าขนาดปกติ) */
+        if (overflow && browserZoom !== 1 && toolbarScale > 0.8) {
+
+            let scale = toolbarScale;
+
+            for (let pass = 0; pass < 4 && overflow && scale > 0.8; pass += 1) {
+
+                const fit = scale * (toolbar.clientWidth / toolbar.scrollWidth) * 0.97;
+
+                scale = Math.max(0.8, Math.min(scale - 0.01, fit));
+
+                toolbar.style.zoom = String(scale / browserZoom);
+
+                overflow = toolbar.scrollWidth > toolbar.clientWidth + 2;
+            }
+        }
 
         if (overflow) {
 
@@ -398,7 +427,7 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
         } else if (browserZoom !== 1) {
 
             /* toolbar ใช้ --toolbar-height เป็นความสูงตัวเองด้วย → ล็อกไว้ก่อนเปลี่ยนตัวแปร */
-            toolbar.style.height = `${baseHeight}px`;
+            toolbar.style.height = `${baseHeight + 4}px`;
         }
 
         /* ความสูงที่เห็นจริงบนหน้าเว็บ (หลังย่อ/ขึ้นบรรทัด) */

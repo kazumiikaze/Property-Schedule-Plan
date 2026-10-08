@@ -60,10 +60,18 @@
 
     const PAGE_W_MM = 420;          // A3 แนวนอน
     const PAGE_H_MM = 297;
-    const MARGIN_MM = 8;
+    /* ระยะขอบ: ใช้ค่าที่เลือก (แคบ / ปกติ / กว้าง) จาก export-compact.js */
+    let MARGIN_MM = 8;
 
-    const PRINT_W_MM = PAGE_W_MM - MARGIN_MM * 2;
-    const PRINT_H_MM = PAGE_H_MM - MARGIN_MM * 2;
+    let PRINT_W_MM = PAGE_W_MM - MARGIN_MM * 2;
+    let PRINT_H_MM = PAGE_H_MM - MARGIN_MM * 2;
+
+    function refreshMargins() {
+        const compact = window.ZGExportCompact;
+        MARGIN_MM = compact ? compact.margin().mm : 8;
+        PRINT_W_MM = PAGE_W_MM - MARGIN_MM * 2;
+        PRINT_H_MM = PAGE_H_MM - MARGIN_MM * 2;
+    }
 
     const PX_TO_MM = 25.4 / 96;    // 1px บนจอ (CSS px) = 0.2646 mm
 
@@ -138,12 +146,18 @@
 
 
     /* คำนวณ % และจำนวนหน้า จากขนาดกระดานบนจอ */
-    function computeLayout() {
+    function computeLayout(sizePx) {
+
+        refreshMargins();
 
         const rect = getBoardRect(settings.kind);
 
-        const boardWmm = Math.max(1, (rect.right - rect.left) * PX_TO_MM);
-        const boardHmm = Math.max(1, (rect.bottom - rect.top) * PX_TO_MM);
+        /* ภาพจริง (ตัดพื้นที่ว่างแล้ว) / ประมาณจากการ export ครั้งก่อน */
+        const compact = window.ZGExportCompact;
+        const shrink = !sizePx && compact && compact.shrinkOf ? compact.shrinkOf(settings.kind) : 1;
+
+        const boardWmm = Math.max(1, (sizePx ? sizePx.w : rect.right - rect.left) * PX_TO_MM);
+        const boardHmm = Math.max(1, (sizePx ? sizePx.h : (rect.bottom - rect.top) * shrink) * PX_TO_MM);
 
         const fitScale =
             Math.min(PRINT_W_MM / boardWmm, PRINT_H_MM / boardHmm);
@@ -243,6 +257,7 @@
     color: #1e7a46;
     font-weight: 700;
 }
+.zg-print-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .zg-print-custom { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .zg-print-custom input[type="number"] {
     width: 70px;
@@ -406,6 +421,21 @@
             button.classList.toggle("active", button.dataset.mode === settings.mode);
         });
 
+        const compact = window.ZGExportCompact;
+
+        if (compact) {
+            const trimInput = panel.querySelector('[data-field="trim"]');
+            if (trimInput) trimInput.checked = Boolean(compact.options.trim);
+            const fillInput = panel.querySelector('[data-field="fill"]');
+            if (fillInput) {
+                fillInput.checked = Boolean(compact.options.fill);
+                fillInput.disabled = !compact.options.trim || settings.mode !== "fit";
+            }
+            panel.querySelectorAll("[data-margin]").forEach(button => {
+                button.classList.toggle("active", button.dataset.margin === compact.options.margin);
+            });
+        }
+
         updateScaleLabel();
     }
 
@@ -447,6 +477,18 @@
                 </div>
             </div>
 
+            <div data-field="trimbox">
+                <div class="zg-print-label">พื้นที่ว่าง</div>
+                <label class="zg-print-check"><input type="checkbox" data-field="trim"> ตัดพื้นที่ว่างบน-ล่าง</label>
+                <label class="zg-print-check"><input type="checkbox" data-field="fill"> ขยายตารางให้เต็มหน้า (พอดี 1 หน้า)</label>
+                <div class="zg-print-label" style="margin-top:6px">ระยะขอบ</div>
+                <div class="zg-print-seg">
+                    <button type="button" data-margin="narrow">แคบ</button>
+                    <button type="button" data-margin="normal">ปกติ</button>
+                    <button type="button" data-margin="wide">กว้าง</button>
+                </div>
+            </div>
+
             <div class="zg-print-summary"></div>
 
             <button type="button" class="zg-print-go">🖨 พิมพ์</button>
@@ -456,8 +498,14 @@
 
             const kindBtn = event.target.closest("[data-kind]");
             const modeBtn = event.target.closest("[data-mode]");
+            const marginBtn = event.target.closest("[data-margin]");
 
-            if (kindBtn) {
+            if (marginBtn && window.ZGExportCompact) {
+
+                window.ZGExportCompact.options.margin = marginBtn.dataset.margin;
+                window.ZGExportCompact.save();
+
+            } else if (kindBtn) {
 
                 settings.kind = kindBtn.dataset.kind;
 
@@ -488,6 +536,26 @@
             saveSettings();
             renderSummary();
         });
+
+        const trimInput = element.querySelector('[data-field="trim"]');
+
+        if (!window.ZGExportCompact) {
+            element.querySelector('[data-field="trimbox"]').style.display = "none";
+        } else {
+            trimInput.addEventListener("change", () => {
+                window.ZGExportCompact.options.trim = trimInput.checked;
+                window.ZGExportCompact.save();
+                renderSummary();
+            });
+
+            const fillInput = element.querySelector('[data-field="fill"]');
+
+            fillInput.addEventListener("change", () => {
+                window.ZGExportCompact.options.fill = fillInput.checked;
+                window.ZGExportCompact.save();
+                renderSummary();
+            });
+        }
 
         const percentInput =
             element.querySelector('[data-field="percent"]');
@@ -632,7 +700,7 @@
 
         try {
 
-            const layout = computeLayout();
+            let layout = computeLayout();
 
             /* ความละเอียดตามขนาดที่พิมพ์ (ประมาณ 150–200 dpi บนกระดาษ) */
             const pixelRatio =
@@ -640,8 +708,34 @@
 
             hideToast();
 
-            const canvas =
+            let canvas =
                 await window.ZGExportImage.capture(settings.kind, { pixelRatio });
+
+            /* ตัดพื้นที่ว่างบน-ล่าง → คำนวณขนาดบนกระดาษจากภาพจริง (พอดีหน้า = ใหญ่ขึ้น) */
+            const compact = window.ZGExportCompact;
+
+            if (compact) {
+
+                canvas = compact.process(canvas);
+
+                /* พอดี 1 หน้า + ขยายตาราง: ภาพกว้างกว่ากระดาษ → ถ่ายใหม่ตอนแถวสูงขึ้นให้เต็มหน้า */
+                if (compact.options.trim && compact.options.fill && settings.mode === "fit" &&
+                    typeof compact.withStretch === "function") {
+
+                    const factor = compact.fillFactor([canvas], PRINT_W_MM / PRINT_H_MM);
+
+                    if (factor > 1.03) {
+                        const tall = await compact.withStretch(factor, () =>
+                            window.ZGExportImage.capture(settings.kind, { pixelRatio }));
+                        canvas = compact.process(tall);
+                    }
+                }
+
+                layout = computeLayout({
+                    w: canvas.width / pixelRatio,
+                    h: canvas.height / pixelRatio
+                });
+            }
 
             showToast("กำลังเปิดหน้าต่างพิมพ์...", { sticky: true });
 

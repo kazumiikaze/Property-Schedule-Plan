@@ -166,6 +166,12 @@
 
             notes: clone(boardNotes),
 
+            /* ขนาดช่องตอนบันทึก → เปิดบนจอขนาดอื่น ความสูง object จะถูกปรับตามสัดส่วน */
+            layout: {
+                categoryHeight: categoryHeight,
+                bracketHeight: bracketContent ? bracketContent.clientHeight : 0
+            },
+
             texts: window.ZGTextBoxes
                 ? window.ZGTextBoxes.serialize()
                 : []
@@ -228,6 +234,47 @@
         }
 
         return null;
+    }
+
+
+    /* แผนที่บันทึกจากจอขนาดอื่น → ปรับตำแหน่ง/ความสูงแนวตั้งของ object ให้ตรงแถวเดิม */
+    function rescaleToScreen(layout) {
+
+        if (!layout) {
+            return;
+        }
+
+        const rowRatio =
+            layout.categoryHeight > 0 && categoryHeight > 0
+                ? categoryHeight / layout.categoryHeight
+                : 1;
+
+        const currentBracket = bracketContent ? bracketContent.clientHeight : 0;
+
+        const bracketRatio =
+            layout.bracketHeight > 0 && currentBracket > 0
+                ? currentBracket / layout.bracketHeight
+                : 1;
+
+        if (Math.abs(rowRatio - 1) < 0.001 && Math.abs(bracketRatio - 1) < 0.001) {
+            return;
+        }
+
+        timelineObjects.forEach(object => {
+
+            if (object.type === "task") {
+
+                object.y = object.y * rowRatio;
+                object.height = Math.max(16, object.height * rowRatio);
+                object.baseHeight = null;
+
+            } else if (object.type === "dateline" || object.type === "hline") {
+
+                object.y = object.y * bracketRatio;
+            }
+        });
+
+        renderObjects();
     }
 
 
@@ -337,6 +384,8 @@
         renderNotes();
 
         renderSchedule();
+
+        rescaleToScreen(data.layout);
 
 
         /* รอให้ object วาดเสร็จก่อน แล้วค่อยวางกล่อง text (เพราะบางกล่องติดแม่เหล็กกับ object) */

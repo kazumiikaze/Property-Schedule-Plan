@@ -123,8 +123,37 @@
     overflow-y: auto;
     overscroll-behavior: contain;
 }
-.zg-plan-list .zg-plan-item { min-height: 46px; margin-bottom: 2px; }
-.zg-plan-list .zg-plan-item[hidden] { display: none; }
+.zg-plan-list .zg-plan-item { min-height: 46px; }
+.zg-plan-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 2px;
+    border-radius: 6px;
+}
+.zg-plan-row[hidden] { display: none; }
+.zg-plan-row .zg-plan-item { flex: 1; min-width: 0; padding-right: 40px; }
+.zg-plan-row-delete {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #8a938d;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s ease;
+}
+.zg-plan-row:hover .zg-plan-row-delete,
+.zg-plan-row-delete:focus-visible { opacity: 1; }
+.zg-plan-row-delete:hover { background: #fdecea; border-color: #f2c3bf; color: #c0392b; }
+@media (hover: none) { .zg-plan-row-delete { opacity: .75; } }
+body.zg-dark .zg-plan-row-delete:hover { background: #3a2624; border-color: #6b3b37; }
 .zg-plan-empty {
     padding: 14px 10px;
     color: #8a938d;
@@ -769,15 +798,20 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
             </div>
             <div class="zg-plan-list">
             ${sorted.map(plan => `
-                <button type="button"
-                    class="zg-plan-item ${plan.id === store.activeId ? "active" : ""}"
-                    data-plan-id="${escapeText(plan.id)}">
-                    <span class="zg-plan-item-check">${plan.id === store.activeId ? "✓" : ""}</span>
-                    <span class="zg-plan-item-text">
-                        <span class="zg-plan-item-name">${escapeText(plan.name)}</span>
-                        <span class="zg-plan-item-time">${escapeText(formatTime(plan.updatedAt))}</span>
-                    </span>
-                </button>
+                <div class="zg-plan-row ${plan.id === store.activeId ? "active" : ""}">
+                    <button type="button"
+                        class="zg-plan-item ${plan.id === store.activeId ? "active" : ""}"
+                        data-plan-id="${escapeText(plan.id)}">
+                        <span class="zg-plan-item-check">${plan.id === store.activeId ? "✓" : ""}</span>
+                        <span class="zg-plan-item-text">
+                            <span class="zg-plan-item-name">${escapeText(plan.name)}</span>
+                            <span class="zg-plan-item-time">${escapeText(formatTime(plan.updatedAt))}</span>
+                        </span>
+                    </button>
+                    <button type="button" class="zg-plan-row-delete"
+                        data-delete-id="${escapeText(plan.id)}"
+                        title="ลบแผนนี้" aria-label="ลบแผนนี้">🗑</button>
+                </div>
             `).join("")}
                 <div class="zg-plan-empty" hidden>ไม่พบแผนที่ค้นหา</div>
             </div>
@@ -793,7 +827,7 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
         const searchInput = menu.querySelector(".zg-plan-search-input");
         const emptyNote = menu.querySelector(".zg-plan-empty");
         const countNote = menu.querySelector(".zg-plan-count");
-        const items = Array.from(menu.querySelectorAll(".zg-plan-item"));
+        const items = Array.from(menu.querySelectorAll(".zg-plan-row"));
 
         function applySearch() {
 
@@ -832,7 +866,7 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
                 if (first) {
                     closeDropdown();
-                    switchToPlan(first.dataset.planId);
+                    switchToPlan(first.querySelector(".zg-plan-item").dataset.planId);
                 }
             }
 
@@ -852,6 +886,20 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
         });
 
         menu.addEventListener("click", event => {
+
+            const deleteBtn =
+                event.target.closest(".zg-plan-row-delete");
+
+            if (deleteBtn) {
+
+                event.stopPropagation();
+
+                closeDropdown();
+
+                openDeleteDialog(deleteBtn.dataset.deleteId);
+
+                return;
+            }
 
             const item =
                 event.target.closest(".zg-plan-item");
@@ -1282,11 +1330,72 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
             const plan = store ? getActivePlan() : null;
 
             return plan ? plan.name : "";
+        },
+
+        /* ---------- ใช้โดย start.js (หน้าเริ่มต้น) ---------- */
+
+        isReady() {
+            return Boolean(store);
+        },
+
+        list() {
+
+            if (!store) return [];
+
+            return store.plans.map(plan => ({
+                id: plan.id,
+                name: plan.name,
+                updatedAt: plan.updatedAt,
+                active: plan.id === store.activeId
+            }));
+        },
+
+        activeId() {
+            return store ? store.activeId : null;
+        },
+
+        switchTo(planId) {
+            if (store) switchToPlan(planId);
+        },
+
+        createBlank(name) {
+            if (store) addPlan(uniqueName(name || "แผนใหม่"), false);
+        },
+
+        renameCurrent(name) {
+
+            if (!store || !name) return;
+
+            const plan = getActivePlan();
+
+            plan.name = name;
+
+            if (plan.data) plan.data.title = plan.data.title || name;
+
+            writeStore();
+
+            updateLabel();
+        },
+
+        /* ลบแผนแบบไม่ถาม (ใช้ลบแผนเปล่าที่ระบบสร้างให้ตอนเปิดครั้งแรก) */
+        removeSilently(planId) {
+
+            if (!store || store.plans.length <= 1) return;
+
+            const index = store.plans.findIndex(plan => plan.id === planId);
+
+            if (index < 0 || planId === store.activeId) return;
+
+            store.plans.splice(index, 1);
+
+            writeStore();
+
+            updateLabel();
         }
     };
 
 
-    function openDeleteDialog() {
+    function openDeleteDialog(planId) {
 
         if (store.plans.length <= 1) {
 
@@ -1295,7 +1404,9 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
             return;
         }
 
-        const plan = getActivePlan();
+        const plan =
+            (planId && store.plans.find(item => item.id === planId)) ||
+            getActivePlan();
 
         openDialog(`
             <div class="zg-plan-dialog-title">ลบแผน</div>
@@ -1476,6 +1587,23 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
 
     /* รอให้ app.js วาดตารางครั้งแรกเสร็จก่อน (app.js ใช้ requestAnimationFrame 2 ชั้น) */
-    waitFrames(4, start);
+    /*
+        รอให้ไฟล์เสริมทุกไฟล์โหลดครบก่อน (DOMContentLoaded = สคริปต์ทุกตัวทำงานแล้ว)
+        เดิมเริ่มหลัง 4 เฟรม → บางครั้งเปิดแผนก่อนไฟล์ รูปแปะ / ขนาดอักษร / ตัวหนา ฯลฯ โหลดเสร็จ
+        ค่าพวกนั้นเลยไม่ถูกใส่กลับ แล้วบันทึกอัตโนมัติก็ทับของเดิมจนหาย
+    */
+    let started = false;
+
+    function startWhenReady() {
+        if (started) return;
+        started = true;
+        waitFrames(4, start);
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", startWhenReady);
+    } else {
+        startWhenReady();
+    }
 
 })();

@@ -42,6 +42,13 @@
 
     const MIN_W = 40;
 
+    /* v3: ระยะขอบเดิม / ระยะขอบแบบแนบชิดข้อความ (กล่องพื้นใส) */
+    const OLD_PAD_X = 8;
+    const OLD_PAD_Y = 6;
+    const FIT_PAD_X = 4;
+    const FIT_PAD_Y = 2;
+
+
     const MIN_H = 24;
 
     const DEFAULT_W = 160;
@@ -59,8 +66,11 @@
     const VIEWPORT_SELECTOR =
         "#objectLayerViewport, #bracketViewport";
 
+    /* + รูปที่แปะบนตาราง (image-board.js) → ติดแม่เหล็กกับรูปได้ด้วย */
     const OBJECT_SELECTOR =
-        "#objectLayer .canvas-object, #bracketContent .canvas-object";
+        "#objectLayer .canvas-object, #bracketContent .canvas-object, .zg-img-layer .zg-bimg";
+
+    const IMAGE_PART = "image";
 
     const HANDLE_DIRS =
         ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
@@ -116,6 +126,24 @@
 .zg-text-box.is-selected { border-style: solid; border-color: #4a90d9; }
 .zg-text-box.is-attached { border-color: rgba(58, 138, 79, .45); }
 .zg-text-box.is-attached.is-selected { border-color: #3a8a4f; }
+
+/* v3: กล่องพื้นใส → ขอบแนบชิดตัวหนังสือ (กว้าง/สูงเท่าข้อความ ไม่เกินความกว้างที่ตั้งไว้) */
+.zg-text-box.zg-text-fit { padding: 2px 4px; border-radius: 4px; }
+.zg-text-box.zg-text-fit .zg-text-handle--n,
+.zg-text-box.zg-text-fit .zg-text-handle--s { display: none; }
+
+/* v4: ทั้งกล่องลากย้ายได้ (ตัวหนังสือด้วย) — เคอร์เซอร์พิมพ์เฉพาะตอนกำลังพิมพ์ */
+.zg-text-box .zg-text-content { cursor: move; }
+.zg-text-box .zg-text-content:focus { cursor: text; }
+/* จุดยืดหด: ไม่โผล่ตอนแค่เอาเมาส์ชี้ (โผล่เมื่อคลิกเลือกกล่อง) และอยู่นอกขอบ ไม่ทับตัวหนังสือ */
+.zg-text-box:hover:not(.is-selected) .zg-text-handle { visibility: hidden; }
+.zg-text-box.zg-text-fit .zg-text-handle { width: 8px; height: 8px; }
+.zg-text-box.zg-text-fit .zg-text-handle--e  { right: -10px; margin-top: -4px; }
+.zg-text-box.zg-text-fit .zg-text-handle--w  { left: -10px;  margin-top: -4px; }
+.zg-text-box.zg-text-fit .zg-text-handle--ne { top: -10px;    right: -10px; }
+.zg-text-box.zg-text-fit .zg-text-handle--nw { top: -10px;    left: -10px; }
+.zg-text-box.zg-text-fit .zg-text-handle--se { bottom: -10px; right: -10px; }
+.zg-text-box.zg-text-fit .zg-text-handle--sw { bottom: -10px; left: -10px; }
 
 .zg-text-inner {
     width: 100%;
@@ -418,6 +446,10 @@ body.zg-text-dragging * { user-select: none !important; }
 
     function getObjectPart(element) {
 
+        if (element.classList.contains("zg-bimg")) {
+            return IMAGE_PART;
+        }
+
         return Array.from(element.classList).find(
             name => name.startsWith("canvas-object--")
         ) || "";
@@ -425,6 +457,12 @@ body.zg-text-dragging * { user-select: none !important; }
 
 
     function findAttachTarget(attach) {
+
+        if (attach.part === IMAGE_PART) {
+            return document.querySelector(
+                `.zg-img-layer .zg-bimg[data-img-id="${CSS.escape(attach.objectId)}"]`
+            );
+        }
 
         const selector =
             `.canvas-object${attach.part ? "." + attach.part : ""}` +
@@ -435,6 +473,15 @@ body.zg-text-dragging * { user-select: none !important; }
 
 
     function objectStillExists(objectId) {
+
+        /* รูปแปะ */
+        if (
+            window.ZGBoardImages &&
+            typeof window.ZGBoardImages.list === "function" &&
+            window.ZGBoardImages.list().some(item => item.id === objectId)
+        ) {
+            return true;
+        }
 
         return (
             typeof timelineObjects !== "undefined" &&
@@ -680,9 +727,17 @@ body.zg-text-dragging * { user-select: none !important; }
                 return;
             }
 
+            if (event.target.closest(".zg-text-controls")) {
+                return;
+            }
+
+            /*
+                v4: กดที่ตัวหนังสือ (ยังไม่ได้อยู่ในโหมดพิมพ์) → ลากย้ายได้เลย
+                คลิกเฉย ๆ ไม่ลาก → เข้าโหมดพิมพ์ (endDrag) / กำลังพิมพ์อยู่ → เลือกข้อความตามปกติ
+            */
             if (
-                event.target.closest(".zg-text-controls") ||
-                event.target.closest(".zg-text-content")
+                event.target.closest(".zg-text-content") &&
+                document.activeElement === box.content
             ) {
                 return;
             }
@@ -740,8 +795,13 @@ body.zg-text-dragging * { user-select: none !important; }
 
         const el = box.el;
 
-        el.style.width = `${box.w}px`;
-        el.style.minHeight = `${box.minH}px`;
+        const fit = box.bg === "transparent";
+
+        el.classList.toggle("zg-text-fit", fit);
+
+        el.style.width = fit ? "max-content" : `${box.w}px`;
+        el.style.maxWidth = fit ? `${box.w}px` : "";
+        el.style.minHeight = fit ? "" : `${box.minH}px`;
         el.style.background = box.bg;
 
 
@@ -964,6 +1024,19 @@ body.zg-text-dragging * { user-select: none !important; }
         event.preventDefault();
         event.stopPropagation();
 
+        /* v3: ย่อ/ขยายกล่องที่หดเท่าข้อความ → เริ่มจากขนาดที่เห็นจริง (ตำแหน่งไม่กระโดด) */
+        if (mode !== "move" && box.el.classList.contains("zg-text-fit")) {
+
+            const offset = fitOffset(box);
+            const start = getPos(box);
+
+            box.w = Math.max(MIN_W, box.el.offsetWidth + (OLD_PAD_X - FIT_PAD_X) * 2);
+            box.minH = Math.max(MIN_H, box.el.offsetHeight + (OLD_PAD_Y - FIT_PAD_Y) * 2);
+
+            setPos(box, start.left + offset.dx - (OLD_PAD_X - FIT_PAD_X), start.top + offset.dy - (OLD_PAD_Y - FIT_PAD_Y));
+            box.el.style.maxWidth = `${box.w}px`;
+        }
+
         const pos =
             getPos(box);
 
@@ -1116,7 +1189,38 @@ body.zg-text-dragging * { user-select: none !important; }
        PLACE (เรียกทุกเฟรม)
     ===================================================== */
 
+    /*
+        v3: กล่องพื้นใสหดเท่าข้อความ → เลื่อนกล่องให้ตัวหนังสืออยู่ที่เดิม
+        (เหมือนตอนอยู่ในกล่องใหญ่ที่จัดซ้าย/กลาง/ขวา บน/กลาง/ล่าง)
+    */
+
+    function fitOffset(box) {
+
+        if (!box.el.classList.contains("zg-text-fit")) {
+            return { dx: 0, dy: 0 };
+        }
+
+        const row = Math.floor(box.textPosition / 3);
+        const col = box.textPosition % 3;
+
+        const textW = box.el.offsetWidth - 2 - FIT_PAD_X * 2;
+        const textH = box.el.offsetHeight - 2 - FIT_PAD_Y * 2;
+
+        const roomW = box.w - 2 - OLD_PAD_X * 2;
+        const roomH = box.minH - 2 - OLD_PAD_Y * 2;
+
+        return {
+            dx: (OLD_PAD_X - FIT_PAD_X) + Math.max(0, roomW - textW) * col / 2,
+            dy: (OLD_PAD_Y - FIT_PAD_Y) + Math.max(0, roomH - textH) * row / 2
+        };
+    }
+
     function showBox(box, left, top) {
+
+        const offset = fitOffset(box);
+
+        left += offset.dx;
+        top += offset.dy;
 
         box.screenLeft = left;
         box.screenTop = top;
@@ -1283,7 +1387,7 @@ body.zg-text-dragging * { user-select: none !important; }
 
         box.attach = {
 
-            objectId: near.el.dataset.objectId,
+            objectId: near.el.dataset.objectId || near.el.dataset.imgId,
 
             part: getObjectPart(near.el),
 
