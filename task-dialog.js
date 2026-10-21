@@ -183,11 +183,24 @@ body.zg-dark .zg-task-menu-btn { background: #26372d; border-color: #3a5a44; col
             preselect = list[0].rows[0] && list[0].rows[0].id;
         }
 
+        /*
+            v2: ค่าเริ่มต้น = "ทั้งหมวด (ทุกแถว)" ของหมวดที่เลือก → กล่องสูงเต็มทั้งหมวด
+            มาจากเมนู ⋮ ของแถว ("เพิ่มงานในแถวนี้") → เลือกแถวนั้นแถวเดียวเหมือนเดิม
+        */
+        const wholeCategoryId = options.rowId
+            ? null
+            : (list.find(category => category.rows.some(row => row.id === preselect)) || list[0]).id;
+
         const optionsHtml = list.map(category => {
 
-            const items = category.rows.map((row, index) => `
+            const whole = category.rows.length > 1 ? `
+                <option value="${escapeAttr(category.id)}|*"
+                    ${category.id === wholeCategoryId ? "selected" : ""}>ทั้งหมวด (ทุกแถว)</option>
+            ` : "";
+
+            const items = whole + category.rows.map((row, index) => `
                 <option value="${escapeAttr(category.id)}|${escapeAttr(row.id)}"
-                    ${row.id === preselect ? "selected" : ""}>${escapeAttr(rowLabel(category, row, index))}</option>
+                    ${row.id === preselect && !(wholeCategoryId === category.id && category.rows.length > 1) ? "selected" : ""}>${escapeAttr(rowLabel(category, row, index))}</option>
             `).join("");
 
             return list.length > 1 || !options.categoryId
@@ -423,13 +436,29 @@ body.zg-dark .zg-task-menu-btn { background: #26372d; border-color: #3a5a44; col
 
     function createTask({ categoryId, rowId, start, days, text }) {
 
+        /* "*" = ทั้งหมวด → กล่องสูงเต็มทุกแถวของหมวด (task-fullrow.js) */
+        const wholeCategory = rowId === "*";
+
+        if (wholeCategory) {
+            const category = categories.find(item => item.id === categoryId);
+            rowId = category && category.rows[0] ? category.rows[0].id : rowId;
+        }
+
         if (typeof selectRow === "function") {
             selectRow(categoryId, rowId);
         } else {
             selectedRowContext = { categoryId, rowId };
         }
 
-        const object = createTimelineObject("task");
+        if (window.ZGTaskFullRow) window.ZGTaskFullRow.mode = wholeCategory ? "category" : "row";
+
+        let object;
+
+        try {
+            object = createTimelineObject("task");
+        } finally {
+            if (window.ZGTaskFullRow) window.ZGTaskFullRow.mode = "category";
+        }
 
         object.x = dateToLeft(start);
         object.width = Math.max(24, days * pxPerDay);

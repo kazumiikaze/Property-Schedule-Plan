@@ -39,10 +39,14 @@
     const DRAG_THRESHOLD = 6;           // px ก่อนนับว่าเป็นการลาก (ไม่ใช่แตะ)
 
     /* ความกว้างช่องวัน (px) ที่ต่ำกว่านี้ถึงจะเริ่มซ่อนเลขวันบางวัน */
-    /* เลข 2 หลักต้องการ ~11px → แคบกว่านี้แสดงทุก 5 วัน (กันเลขล้นทับกัน) */
-    const DAY_SPARSE_PX = 11;
+    /*
+        เลข 2 หลักขนาดอ่านสบาย (11px) ต้องการช่อง ~13px
+        แคบกว่านี้ → แสดงเลขเฉพาะวันจันทร์ (ห่างกันสัปดาห์ละช่อง ไม่ชนกัน)
+        แคบมาก ๆ → แค่วันที่ 1 กับ 15
+    */
+    const DAY_SPARSE_PX = 13;
 
-    const DAY_MINIMAL_PX = 4;
+    const DAY_MINIMAL_PX = 2.6;
 
     const DRAG_SELECTOR = [
         ".canvas-object",
@@ -228,28 +232,31 @@ html.zg-toolbar-scroll .toolbar-row-secondary { margin-top: 2px; }
 html.zg-toolbar-scroll .toolbar-row > * { flex-shrink: 0; }
 html.zg-toolbar-scroll body.zg-dark .toolbar-row { scrollbar-color: #4a5550 transparent; }
 
-/* ---------- เลขวันบนหัวตารางแน่นเกิน → แสดงเฉพาะบางวัน ---------- */
+/* ---------- เลขวันบนหัวตารางแน่นเกิน → แสดงเฉพาะวันจันทร์ (ต้นสัปดาห์) ---------- */
 html.zg-days-sparse .day-number-label,
 html.zg-days-minimal .day-number-label { visibility: hidden; }
 
-html.zg-days-sparse .day-number-label[data-date$="-01"],
-html.zg-days-sparse .day-number-label[data-date$="-05"],
-html.zg-days-sparse .day-number-label[data-date$="-10"],
-html.zg-days-sparse .day-number-label[data-date$="-15"],
-html.zg-days-sparse .day-number-label[data-date$="-20"],
-html.zg-days-sparse .day-number-label[data-date$="-25"],
-html.zg-days-minimal .day-number-label[data-date$="-01"],
-html.zg-days-minimal .day-number-label[data-date$="-15"],
+html.zg-days-sparse .day-number-label[data-dow="1"]:not(.zg-day-yield),
+html.zg-days-minimal .day-number-label[data-date$="-01"]:not(.zg-day-yield),
+html.zg-days-minimal .day-number-label[data-date$="-15"]:not(.zg-day-yield),
 html.zg-days-sparse .day-number-label--highlight,
 html.zg-days-sparse .day-number-label--highlight-vline,
 html.zg-days-minimal .day-number-label--highlight,
 html.zg-days-minimal .day-number-label--highlight-vline {
     visibility: visible;
-    font-size: 9px !important;
+    font-size: 11px !important;
     overflow: visible;
     display: flex;
     justify-content: center;
 }
+html.zg-days-sparse .day-number-label[data-dow="1"] { color: #4f5853; font-weight: 600; }
+
+/* ช่องวันแคบ: เส้นรายวันจางลง เส้นวันจันทร์ (ต้นสัปดาห์) ชัดขึ้น */
+html.zg-days-sparse .dynamic-v-line--day:not(.is-monday),
+html.zg-days-minimal .dynamic-v-line--day:not(.is-monday) { opacity: .45; }
+html.zg-days-sparse .dynamic-v-line--day.is-monday { border-left: 1px dashed #c3cbc6; }
+html.zg-days-sparse body.zg-dark .dynamic-v-line--day.is-monday { border-left-color: #3a4341; }
+html.zg-days-sparse body.zg-dark .day-number-label[data-dow="1"] { color: #b7c1bc; }
 
 /* ---------- จอแนวตั้ง ---------- */
 .zg-rotate-hint {
@@ -542,7 +549,7 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
 
         /*
             ซ่อนเฉพาะตอนแน่นจนอ่านไม่ออกจริง ๆ
-            (ช่องวันแคบกว่า DAY_SPARSE_PX → ทุก 5 วัน, แคบกว่า DAY_MINIMAL_PX → วันที่ 1 กับ 15)
+            (ช่องวันแคบกว่า DAY_SPARSE_PX → เฉพาะวันจันทร์, แคบกว่า DAY_MINIMAL_PX → วันที่ 1 กับ 15)
         */
         root.classList.toggle("zg-days-sparse", px < DAY_SPARSE_PX && px >= DAY_MINIMAL_PX);
         root.classList.toggle("zg-days-minimal", px < DAY_MINIMAL_PX);

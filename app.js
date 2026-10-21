@@ -198,15 +198,15 @@ const TIMELINE_SCROLL_STEP = 160;
 const BASE_PX_PER_DAY = 6;
 
 /*
-    จำนวนเดือนที่เห็นเต็มจอที่ซูม 100%
-    v2: 6 → 3 (ช่องวันกว้างขึ้น 2 เท่า — เลขวัน / ข้อความในกล่องงานไม่ล้นช่อง)
+    จำนวนเดือนที่เห็นเต็มจอที่ซูม 100% (ภาพรวม 6 เดือน)
+    ดูละเอียด 3 เดือน → ปุ่ม "3 เดือน" ข้างซูม (view-range.js)
+    เลขวันแน่น → หัวตารางแสดงเฉพาะวันจันทร์ (responsive.js)
 */
-const VISIBLE_MONTHS_DEFAULT = 3;
+const VISIBLE_MONTHS_DEFAULT = 6;
 
 const ZOOM_STEP = 0.1;
 
-/* 0.2 = ความหนาแน่นเท่าซูม 40% แบบเดิม (ก่อนขยายช่องวัน 2 เท่า) */
-const ZOOM_MIN = 0.2;
+const ZOOM_MIN = 0.4;
 
 const ZOOM_MAX = 2.5;
 
@@ -1342,6 +1342,10 @@ function createDayLabel(
     label.dataset.date =
         formatDateInputValue(dayDate);
 
+    /* วันในสัปดาห์ (1 = จันทร์) → ช่องวันแคบ แสดงเลขเฉพาะวันจันทร์ */
+    label.dataset.dow =
+        String(dayDate.getDay());
+
 
     label.textContent =
         String(dayNumber);
@@ -1442,17 +1446,23 @@ function renderDayTicks() {
             !isMonthBoundary
         ) {
 
+            /* วันจันทร์ = เส้นต้นสัปดาห์ (เด่นกว่าเส้นวันตอนช่องวันแคบ) */
+            const tier =
+                dayDate.getDay() === 1
+                    ? "day is-monday"
+                    : "day";
+
             createVerticalLine(
                 scheduleGrid,
                 left,
-                "day"
+                tier
             );
 
 
             createVerticalLine(
                 timelineHeaderInner,
                 left,
-                "day"
+                tier
             );
         }
 

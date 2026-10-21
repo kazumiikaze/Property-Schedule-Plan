@@ -3,7 +3,8 @@
 /* =========================================================
    TASK-FULLROW.JS — งาน (task) ใหม่สูงเต็มแถว บน-ล่าง
    - สร้างงานใหม่ (ปุ่ม "＋ งาน", หน้าต่างกำหนดวันที่, เมนู ⋮ หมวดหมู่)
-     → กล่องชิดขอบบน-ล่างของแถว (เว้นขอบเล็กน้อย)
+     → v2: กล่องสูงเต็มทั้งหมวดหมู่ (ครอบทุกแถวในหมวด เช่น 2 แถว)
+       จำไว้ที่ fullRowId = "cat:<id หมวด>" (งานเก่าที่เต็มแถวเดียว ยังเป็นแบบเดิม)
    - แถวสูง/เตี้ยลงภายหลัง (ซูม, ย่อ/ขยายหน้าต่าง, เพิ่ม/ลบแถว)
      → กล่องยังเต็มแถวตามเสมอ
    - ถ้าผู้ใช้ลากขึ้น-ลง หรือปรับความสูงกล่องเอง → เลิกยึดเต็มแถว
@@ -36,9 +37,37 @@
         };
     }
 
+    /* ช่องที่กล่องต้องเต็ม: "cat:<id>" = ทั้งหมวด, อื่น ๆ = แถวเดียว */
+    function slotOf(id) {
+        if (typeof id === "string" && id.startsWith("cat:")) {
+            return typeof categorySlotMap === "object" && categorySlotMap ? categorySlotMap[id.slice(4)] : null;
+        }
+        return rowSlotMap ? rowSlotMap[id] : null;
+    }
+
+    /* หมวดของแถวที่เลือก หรือหมวดที่อยู่บนสุดของจอตอนนี้ */
+    function targetCategoryId() {
+
+        if (selectedRowContext && selectedRowContext.categoryId) return selectedRowContext.categoryId;
+
+        if (typeof categorySlotMap !== "object" || !categorySlotMap) return null;
+
+        const y = (typeof verticalScrollY === "number" ? verticalScrollY : 0) + 1;
+
+        const id = Object.keys(categorySlotMap).find(key => {
+            const slot = categorySlotMap[key];
+            return slot && y >= slot.top && y < slot.top + slot.height;
+        });
+
+        return id || null;
+    }
+
     function same(a, b) {
         return Math.abs(Number(a) - Number(b)) < 0.75;
     }
+
+
+    const api = window.ZGTaskFullRow = { mode: "category" };
 
 
     /* ---------- สร้างงานใหม่ ---------- */
@@ -55,9 +84,16 @@
 
         try {
 
+            /* "row" = แถวเดียว (เลือกแถวเองในหน้าต่างเพิ่มงาน) · "category" = ทั้งหมวด (ค่าเริ่มต้น) */
             const rowId = selectedRowContext && selectedRowContext.rowId;
 
-            const slot = rowId && rowSlotMap && rowSlotMap[rowId];
+            const categoryId = targetCategoryId();
+
+            const slotId = api.mode === "row" && rowId
+                ? rowId
+                : (categoryId ? `cat:${categoryId}` : null);
+
+            const slot = slotId && slotOf(slotId);
 
             if (slot && slot.height > 0) {
 
@@ -66,7 +102,7 @@
                 object.y = box.y;
                 object.height = box.height;
 
-                object.fullRowId = rowId;
+                object.fullRowId = slotId;
                 object.fullRowY = box.y;
                 object.fullRowH = box.height;
             }
@@ -100,9 +136,9 @@
                 return;
             }
 
-            const slot = rowSlotMap[object.fullRowId];
+            const slot = slotOf(object.fullRowId);
 
-            /* แถวถูกลบ → ปล่อยไว้ที่เดิม */
+            /* แถว / หมวดถูกลบ → ปล่อยไว้ที่เดิม */
             if (!slot || !(slot.height > 0)) return;
 
             const box = fitBox(slot);

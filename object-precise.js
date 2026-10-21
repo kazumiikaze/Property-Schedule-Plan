@@ -392,9 +392,21 @@ body.zg-exporting .zg-obj-selected::before { background: transparent !important;
             .sort((a, b) => a.top - b.top);
     }
 
+    /* กล่องเต็มทั้งหมวด (task-fullrow.js "cat:<id>") → เลื่อนขึ้นลงทีละหมวด */
+    function categorySlots() {
+
+        if (typeof categorySlotMap !== "object" || !categorySlotMap) return [];
+
+        return Object.keys(categorySlotMap)
+            .map(id => ({ id: `cat:${id}`, ...categorySlotMap[id] }))
+            .sort((a, b) => a.top - b.top);
+    }
+
     function moveTaskRow(object, direction) {
 
-        const slots = rowSlots();
+        const slots = typeof object.fullRowId === "string" && object.fullRowId.startsWith("cat:")
+            ? categorySlots()
+            : rowSlots();
 
         if (!slots.length) return false;
 
