@@ -368,15 +368,10 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         return Math.max(50, Math.floor(right - rect.left));
     }
 
-    /* ขอบขวาของงาน = 5 วันหลัง object สุดท้าย (ดู export-image.js) */
-    function exportEndX() {
-        return typeof exporter.fullEndX === "function" ? exporter.fullEndX() : timelineWidthPx;
-    }
-
-    /* แบ่งช่วงตามเดือน: แต่ละหน้า = เดือนเต็ม ๆ ที่ใส่ในความกว้างจอได้ (จบที่ 5 วันหลัง object สุดท้าย) */
+    /* แบ่งช่วงตามเดือน: แต่ละหน้า = เดือนเต็ม ๆ ที่ใส่ในความกว้างจอได้ */
     function planSegments() {
 
-        const total = exportEndX();
+        const total = timelineWidthPx;
         const visible = visibleTimelineWidth();
         const bounds = monthBoundaries();
         const segments = [];
@@ -404,16 +399,7 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         return segments;
     }
 
-    /* หน้าเดียว = ทั้งตาราง (ไม่สนขอบจอ) ตั้งแต่วันเริ่ม → 5 วันหลัง object สุดท้าย */
     async function captureSingle(kind) {
-
-        if (hasTimeline() && typeof exporter.captureFull === "function") {
-
-            const canvas = await exporter.captureFull(kind, { pixelRatio: 2 });
-            const range = canvas.zgRange || { fromX: 0, toX: exportEndX() };
-
-            return [{ canvas, label: rangeLabel(range.fromX, range.toX) }];
-        }
 
         const canvas = await exporter.capture(kind, { pixelRatio: 2 });
 
@@ -434,21 +420,6 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         const segments = planSegments();
 
         if (segments.length <= 1) return captureSingle(kind);
-
-        /* ถ่ายทีละช่วงเดือนแบบเต็มตาราง (ทุกหมวด ไม่สนขอบจอ) */
-        if (typeof exporter.captureFull === "function") {
-
-            const pages = [];
-
-            for (let i = 0; i < segments.length; i += 1) {
-                const segment = segments[i];
-                if (onProgress) onProgress(i + 1, segments.length);
-                const canvas = await exporter.captureFull(kind, { pixelRatio: 2, fromX: segment.start, toX: segment.end });
-                pages.push({ canvas, label: rangeLabel(segment.start, segment.end) });
-            }
-
-            return pages;
-        }
 
         const content = typeof timelineContent !== "undefined" ? timelineContent : null;
         const bracket = typeof bracketContent !== "undefined" ? bracketContent : null;
@@ -874,8 +845,8 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
             $("company").checked = Boolean(options.footer);
 
             $("pagehint").textContent = options.pages === "months"
-                ? "ทั้งแผน หน้าละหลายเดือนเต็ม ๆ (เท่าความกว้างจอ) ทุกหมวด — จบที่ 5 วันหลังงานสุดท้าย · อยากให้หน้าละหลายเดือนขึ้นให้ซูมออกก่อน"
-                : "ทั้งตารางในภาพเดียว (ไม่สนขอบจอ) ทุกหมวด — ตั้งแต่วันเริ่มตาราง ถึง 5 วันหลังงานสุดท้าย";
+                ? "ทั้งช่วงแผน หน้าละหลายเดือนเต็ม ๆ ตามที่เห็นบนจอ — อยากให้หน้าละหลายเดือนขึ้นให้ซูมออกก่อน"
+                : "ตามที่เห็นบนจอตอนนี้";
         }
 
         function setBusy(on, text) {

@@ -135,9 +135,6 @@ body.zg-exporting .zg-text-box:hover,
 body.zg-exporting .zg-text-box.is-selected,
 body.zg-exporting .zg-text-box.is-attached { border-color: transparent !important; }
 body.zg-exporting .zg-text-box.is-empty { display: none !important; }
-/* ถ่ายทั้งตารางแบบต่อภาพ: กล่อง Update วาดแยก / กล่อง text ลอย (ไม่ติด object) อยู่แค่ภาพแรก */
-body.zg-xp-tiling .zg-update-date { visibility: hidden !important; }
-body.zg-xp-tiling.zg-xp-tile-more .zg-text-box:not(.is-attached) { visibility: hidden !important; }
 body.zg-exporting [contenteditable="true"]:focus {
     background: transparent !important;
     box-shadow: none !important;
@@ -569,11 +566,10 @@ body.zg-exporting [contenteditable="true"]:focus {
 
             await nextFrames(2);
 
-            const crop = options.screen
-                ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
-                : getCropRect(kind);
+            const crop =
+                getCropRect(kind);
 
-            if (kind !== "table" && !options.screen) {
+            if (kind !== "table") {
                 restoreUpdateDate = moveUpdateDateInto(crop);
             }
 
@@ -597,8 +593,7 @@ body.zg-exporting [contenteditable="true"]:focus {
 
                     backgroundColor: "#ffffff",
 
-                    /* ถ่ายต่อภาพ: โหลดรูปใหม่แค่ภาพแรก ภาพถัดไปใช้ที่โหลดไว้ (เร็วขึ้นมาก) */
-                    cacheBust: options.cacheBust !== false,
+                    cacheBust: true,
 
                     skipFonts: true,
 
@@ -650,331 +645,6 @@ body.zg-exporting [contenteditable="true"]:focus {
     }
 
 
-    /* =====================================================
-       FULL CAPTURE — ถ่าย "ทุกอย่างในตาราง" ไม่สนขอบจอ
-       - แนวนอน: ตั้งแต่วันเริ่มตาราง → 5 วันหลัง object ชิ้นสุดท้าย
-       - แนวตั้ง: ทุกหมวดหมู่ (เกิน 3 หมวด = เลื่อนถ่ายทีละหน้าจอ)
-       วิธี: เลื่อนตารางทีละช่วง ถ่ายทั้งหน้าจอ แล้วตัดเฉพาะแถบที่เลื่อนได้มาต่อกัน
-             (ส่วนที่อยู่กับที่ เช่น หัวแผน / ชื่อหมวด / บันทึก เอาจากภาพแรก)
-    ===================================================== */
-
-    const TAIL_DAYS = 5;
-
-    function hasGeometry() {
-        return typeof timelineViewport !== "undefined" &&
-            typeof timelineWidthPx !== "undefined" &&
-            typeof pxPerDay !== "undefined" &&
-            timelineWidthPx > 0 && pxPerDay > 0;
-    }
-
-    /* ขอบขวาสุดของ object ทุกชนิด (px นับจากวันเริ่มตาราง) */
-    function contentRightX() {
-
-        const viewport = document.getElementById("timelineViewport");
-        const left = viewport.getBoundingClientRect().left - viewport.scrollLeft;
-
-        const selectors = [
-            "#objectLayer > *",
-            "#hlineLayer > *",
-            "#bracketContent .canvas-object",
-            ".zg-img-layer [data-img-id], .zg-img-layer .zg-img",
-            ".zg-text-box.is-attached"
-        ];
-
-        let right = 0;
-
-        document.querySelectorAll(selectors.join(",")).forEach(element => {
-            if (element.closest("[hidden]")) return;
-            const rect = element.getBoundingClientRect();
-            if (!(rect.width > 0 || rect.height > 0)) return;
-            right = Math.max(right, rect.right - left);
-        });
-
-        /* ข้อมูล (ไม่พึ่ง DOM): task / hline / เส้นวันที่ */
-        if (typeof timelineObjects !== "undefined" && Array.isArray(timelineObjects)) {
-            timelineObjects.forEach(object => {
-                if (!object) return;
-                if (object.linkedHeaderDate instanceof Date && typeof dateToLeft === "function") {
-                    right = Math.max(right, dateToLeft(object.linkedHeaderDate) + pxPerDay);
-                } else if (Number.isFinite(object.x) && Number.isFinite(object.width)) {
-                    right = Math.max(right, object.x + object.width);
-                }
-            });
-        }
-
-        return right;
-    }
-
-    /* ขอบขวาของภาพ = 5 วันหลัง object สุดท้าย (ไม่มี object = ทั้งตาราง) */
-    function fullEndX() {
-
-        const right = contentRightX();
-
-        if (!(right > 0)) return timelineWidthPx;
-
-        /* ปัดเป็นขอบวัน แล้วบวก 5 วัน */
-        const endDay = Math.ceil(right / pxPerDay - 0.001) + TAIL_DAYS;
-
-        return Math.max(pxPerDay * (TAIL_DAYS + 1), endDay * pxPerDay);
-    }
-
-    function rectOf(element) {
-        return element ? element.getBoundingClientRect() : null;
-    }
-
-    function frames2(count) {
-        return nextFrames(count);
-    }
-
-    /*
-        options: { pixelRatio, fromX, toX }  (px นับจากวันเริ่มตาราง)
-        คืน canvas (มี .zgCompact ให้ export-compact.js ตัดที่ว่างต่อได้)
-    */
-    async function captureFull(kind, options = {}) {
-
-        if (!hasGeometry()) {
-            return capture(kind, options);
-        }
-
-        const ratio = Number(options.pixelRatio) > 0 ? Number(options.pixelRatio) : PIXEL_RATIO;
-
-        const viewport = document.getElementById("timelineViewport");
-        const area = document.getElementById("scheduleArea");
-        const header = document.getElementById("timelineHeader");
-        const bracket = document.getElementById("bracketArea") || document.querySelector(".bracket-area");
-        const bracketView = document.getElementById("bracketViewport");
-        const content = document.getElementById("timelineContent");
-        const bracketBox = document.getElementById("bracketContent");
-
-        if (!viewport || !area) {
-            return capture(kind, options);
-        }
-
-        const saved = {
-            scrollX: viewport.scrollLeft,
-            scrollY: typeof verticalScrollY !== "undefined" ? verticalScrollY : 0,
-            content: content ? [content.style.width, content.style.minWidth] : null,
-            bracket: bracketBox ? [bracketBox.style.width, bracketBox.style.minWidth] : null
-        };
-
-        const fromX = Math.max(0, Number.isFinite(options.fromX) ? options.fromX : 0);
-        const toX = Math.max(fromX + pxPerDay, Number.isFinite(options.toX) ? options.toX : fullEndX());
-
-        const scrollTo = (x, y) => {
-            viewport.scrollLeft = x;
-            if (bracketView) bracketView.scrollLeft = x;
-            viewport.dispatchEvent(new Event("scroll"));
-            if (typeof setVerticalScroll === "function") setVerticalScroll(y);
-        };
-
-        let updateCanvas = null;
-
-        try {
-
-            /* ขยายพื้นที่เลื่อนชั่วคราว ให้เลื่อนไปถึงช่วงสุดท้าย (หรือ object ที่เกินวันสิ้นสุด) ได้ */
-            const extended = `${Math.max(timelineWidthPx, toX) + viewport.clientWidth + 40}px`;
-
-            [content, bracketBox].forEach(element => {
-                if (element) {
-                    element.style.width = extended;
-                    element.style.minWidth = extended;
-                }
-            });
-
-            scrollTo(fromX, 0);
-
-            await frames2(3);
-
-            /* ---------- วัดตำแหน่ง (หลังซ่อนตัวช่วยแบบตอนถ่าย) ---------- */
-
-            document.body.classList.add("zg-exporting");
-
-            const crop = getFullCropRect(kind);
-            const view = rectOf(viewport);
-            const A = rectOf(area);
-            const H = rectOf(header) || A;
-            const B = rectOf(bracket) || A;
-
-            /* ความกว้างช่องตารางที่เห็น (ไม่รวมแถบเลื่อนหมวดทางขวา) */
-            const colLeft = view.left;
-            const colWidth = Math.max(50, Math.floor(Math.min(view.right, A.right) - view.left));
-
-            /* ทั้งกระดาน: ส่วนที่อยู่กับที่ทางขวา (การ์ดบันทึก / หัวแผน) ต้องไม่โดนตัด */
-            let width = toX - fromX;
-
-            if (kind !== "table") {
-                let staticRight = 0;
-                document.querySelectorAll(".plan-header .title-box, #notesTrack .note-card, .note-card").forEach(element => {
-                    const rect = element.getBoundingClientRect();
-                    if (rect.width > 0 && rect.right <= window.innerWidth + 1) {
-                        staticRight = Math.max(staticRight, rect.right - colLeft + 8);
-                    }
-                });
-                width = Math.max(width, Math.min(colWidth, staticRight));
-            }
-
-            const leftW = colLeft - crop.left;
-            const pad = kind === "table" ? 2 : Math.max(8, A.left - crop.left);
-
-            const rowsVisible = A.height;
-            const rowsTotal = Math.max(rowsVisible, typeof totalContentHeight !== "undefined" ? totalContentHeight : rowsVisible);
-
-            const topH = A.top - crop.top;
-            const bottomH = crop.bottom - A.bottom;
-
-            const outW = Math.round((leftW + width + pad) * ratio);
-            const outH = Math.round((topH + rowsTotal + bottomH) * ratio);
-
-            document.body.classList.remove("zg-exporting");
-
-            /* กล่อง Update: ถ่ายแยกไว้ก่อน แล้ววางมุมขวาล่างของภาพ */
-            const update = kind !== "table" ? document.querySelector(".zg-update-date") : null;
-
-            if (update && update.getBoundingClientRect().width > 0) {
-                try {
-                    const htmlToImage = await ensureLib("htmlToImage");
-                    updateCanvas = await htmlToImage.toCanvas(update, {
-                        pixelRatio: ratio, cacheBust: true, skipFonts: true, backgroundColor: "#ffffff"
-                    });
-                    updateCanvas.zgRect = update.getBoundingClientRect();
-                } catch (error) {
-                    updateCanvas = null;
-                }
-            }
-
-            const out = document.createElement("canvas");
-            out.width = outW;
-            out.height = outH;
-
-            const ctx = out.getContext("2d");
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, outW, outH);
-
-            const copy = (source, sx, sy, sw, sh, dx, dy) => {
-                if (sw <= 0 || sh <= 0) return;
-                const r = ratio;
-                ctx.drawImage(source,
-                    Math.round(sx * r), Math.round(sy * r), Math.round(sw * r), Math.round(sh * r),
-                    Math.round(dx * r), Math.round(dy * r), Math.round(sw * r), Math.round(sh * r));
-            };
-
-            const pagesY = Math.max(1, Math.ceil((rowsTotal - 0.5) / rowsVisible));
-            const pagesX = Math.max(1, Math.ceil((width - 0.5) / colWidth));
-
-            document.body.classList.add("zg-xp-tiling");
-
-            let firstShot = null;
-
-            for (let j = 0; j < pagesY; j += 1) {
-
-                for (let i = 0; i < pagesX; i += 1) {
-
-                    document.body.classList.toggle("zg-xp-tile-more", i > 0 || j > 0);
-
-                    scrollTo(fromX + i * colWidth, j * rowsVisible);
-
-                    await frames2(3);
-
-                    const sx = viewport.scrollLeft - fromX;                         /* ตำแหน่งจริงหลังเลื่อน */
-                    const sy = typeof verticalScrollY !== "undefined" ? verticalScrollY : 0;
-
-                    const shot = await capture(kind, { pixelRatio: ratio, screen: true, cacheBust: !firstShot });
-
-                    if (!firstShot) firstShot = shot;
-
-                    const w = Math.min(colWidth, width - sx);
-                    const rowsH = Math.min(rowsVisible, rowsTotal - sy);
-
-                    const dx = leftW + sx;
-
-                    /* แถวในตาราง (ช่องวัน) */
-                    copy(shot, colLeft, A.top, w, rowsH, dx, topH + sy);
-
-                    /* ชื่อหมวด / แถว (อยู่ซ้าย ไม่เลื่อนซ้ายขวา) */
-                    if (i === 0) copy(shot, crop.left, A.top, leftW, rowsH, 0, topH + sy);
-
-                    if (j === 0) {
-                        if (i === 0) {
-                            /* หัวแผน + หัวเดือน/วันที่ ทั้งแถบ */
-                            copy(shot, crop.left, crop.top, leftW + w, topH, 0, 0);
-                        } else {
-                            /* หัวเดือน/วันที่ ช่วงถัดไป */
-                            copy(shot, colLeft, H.top, w, A.top - H.top, dx, H.top - crop.top);
-                        }
-                    }
-
-                    if (j === pagesY - 1) {
-                        const base = topH + rowsTotal;
-                        if (i === 0) {
-                            /* แถบเลื่อน + เส้นวันที่ (Bracket) + บันทึกท้ายกระดาน */
-                            copy(shot, crop.left, A.bottom, leftW + w, bottomH, 0, base);
-                        } else {
-                            /* เส้นวันที่ (Bracket) ช่วงถัดไป */
-                            copy(shot, colLeft, A.bottom, w, B.bottom - A.bottom, dx, base);
-                        }
-                    }
-                }
-            }
-
-            /* ทั้งกระดานยาวเกินจอ → ต่อเส้นเขียวใต้หัวแผนให้ยาวถึงขอบขวาของภาพ */
-            if (kind !== "table" && firstShot && width > colWidth && H.top > crop.top) {
-                const r = ratio;
-                const srcX = Math.round((colLeft + colWidth - 3 - 0) * r);
-                const destX = Math.round((leftW + colWidth - 3) * r);
-                ctx.drawImage(firstShot,
-                    srcX, Math.round(crop.top * r), 1, Math.round((H.top - crop.top) * r),
-                    destX, 0, Math.round((width - colWidth + 3) * r), Math.round((H.top - crop.top) * r));
-            }
-
-            /* ปิดท้ายตาราง: เส้นขอบขวา */
-            ctx.fillStyle = "#c9d1cc";
-            ctx.fillRect(Math.round((leftW + width) * ratio), Math.round((H.top - crop.top) * ratio),
-                Math.max(1, Math.round(ratio)), Math.round((topH - (H.top - crop.top) + rowsTotal + (B.bottom - A.bottom)) * ratio));
-
-            if (updateCanvas) {
-                const rect = updateCanvas.zgRect;
-                /* มุมขวาล่างของภาพ (อยู่ในกรอบเสมอ) */
-                const maxY = outH / ratio - rect.height - 6;
-                const dy = Math.max(0, Math.min(maxY, (topH + rowsTotal) + (rect.top - A.bottom)));
-                const dx = leftW + width - rect.width;
-                ctx.drawImage(updateCanvas, Math.round(dx * ratio), Math.round(dy * ratio));
-            }
-
-            /* ให้ export-compact.js ตัดพื้นที่ว่างบน-ล่างต่อได้ (ห้ามบีบช่วงตาราง) */
-            const tableTop = Math.min(H.top, A.top);
-            const tableBottom = Math.max(B.bottom, A.bottom) + (rowsTotal - rowsVisible);
-
-            out.zgCompact = {
-                ratio,
-                kind,
-                keepFrom: Math.max(0, Math.round((tableTop - crop.top) * ratio)),
-                keepTo: Math.round((tableBottom - crop.top) * ratio)
-            };
-
-            out.zgRange = { fromX, toX: fromX + width };
-            out.zgTiles = { x: pagesX, y: pagesY, rowsTotal, rowsVisible, colWidth };
-
-            return out;
-
-        } finally {
-
-            document.body.classList.remove("zg-xp-tiling", "zg-xp-tile-more", "zg-exporting");
-
-            if (content && saved.content) {
-                content.style.width = saved.content[0];
-                content.style.minWidth = saved.content[1];
-            }
-
-            if (bracketBox && saved.bracket) {
-                bracketBox.style.width = saved.bracket[0];
-                bracketBox.style.minWidth = saved.bracket[1];
-            }
-
-            scrollTo(saved.scrollX, saved.scrollY);
-        }
-    }
-
-
     async function exportAs(kind, format) {
 
         if (busy) {
@@ -987,9 +657,8 @@ body.zg-exporting [contenteditable="true"]:focus {
 
         try {
 
-            /* ทั้งตาราง ไม่สนขอบจอ → จบที่ 5 วันหลัง object สุดท้าย */
             const canvas =
-                await captureFull(kind);
+                await capture(kind);
 
             const fileBase =
                 baseFileName(kind);
@@ -1248,11 +917,6 @@ body.zg-exporting [contenteditable="true"]:focus {
 
         /* ใช้โดย print-a3.js */
         capture,
-
-        /* ถ่ายทั้งตาราง ไม่สนขอบจอ (ใช้โดย export-plus.js) */
-        captureFull,
-
-        fullEndX,
 
         getCropRect
     };

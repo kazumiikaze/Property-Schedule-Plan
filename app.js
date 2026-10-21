@@ -197,11 +197,6 @@ const TIMELINE_SCROLL_STEP = 160;
 */
 const BASE_PX_PER_DAY = 6;
 
-/*
-    จำนวนเดือนที่เห็นเต็มจอที่ซูม 100% (ภาพรวม 6 เดือน)
-    ดูละเอียด 3 เดือน → ปุ่ม "3 เดือน" ข้างซูม (view-range.js)
-    เลขวันแน่น → หัวตารางแสดงเฉพาะวันจันทร์ (responsive.js)
-*/
 const VISIBLE_MONTHS_DEFAULT = 6;
 
 const ZOOM_STEP = 0.1;
@@ -1330,7 +1325,7 @@ function createDayLabel(
 
 
     label.style.fontSize =
-        `${clamp(pxPerDay * 0.6, 6, 11)}px`;
+        `${clamp(pxPerDay * 0.55, 5, 9)}px`;
 
 
     /*
@@ -1341,10 +1336,6 @@ function createDayLabel(
 
     label.dataset.date =
         formatDateInputValue(dayDate);
-
-    /* วันในสัปดาห์ (1 = จันทร์) → ช่องวันแคบ แสดงเลขเฉพาะวันจันทร์ */
-    label.dataset.dow =
-        String(dayDate.getDay());
 
 
     label.textContent =
@@ -1446,23 +1437,17 @@ function renderDayTicks() {
             !isMonthBoundary
         ) {
 
-            /* วันจันทร์ = เส้นต้นสัปดาห์ (เด่นกว่าเส้นวันตอนช่องวันแคบ) */
-            const tier =
-                dayDate.getDay() === 1
-                    ? "day is-monday"
-                    : "day";
-
             createVerticalLine(
                 scheduleGrid,
                 left,
-                tier
+                "day"
             );
 
 
             createVerticalLine(
                 timelineHeaderInner,
                 left,
-                tier
+                "day"
             );
         }
 
