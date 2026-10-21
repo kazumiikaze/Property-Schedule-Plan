@@ -39,9 +39,10 @@
     const DRAG_THRESHOLD = 6;           // px ก่อนนับว่าเป็นการลาก (ไม่ใช่แตะ)
 
     /* ความกว้างช่องวัน (px) ที่ต่ำกว่านี้ถึงจะเริ่มซ่อนเลขวันบางวัน */
-    const DAY_SPARSE_PX = 6;
+    /* เลข 2 หลักต้องการ ~11px → แคบกว่านี้แสดงทุก 5 วัน (กันเลขล้นทับกัน) */
+    const DAY_SPARSE_PX = 11;
 
-    const DAY_MINIMAL_PX = 3;
+    const DAY_MINIMAL_PX = 4;
 
     const DRAG_SELECTOR = [
         ".canvas-object",
@@ -172,9 +173,11 @@ html.zg-screen-xl .toolbar-search input { font-size: 13px; }
 
 /* ---------- จอคอมเล็ก / หน้าต่างแคบ ---------- */
 html.zg-screen-s {
-    --category-width: 12%;
-    --party-width: 20%;
+    /* หน้าต่างแคบ (แบ่งครึ่งจอ) → ช่องชื่อหมวด/แถว ไม่แคบกว่านี้ (ชื่อไม่หักกลางคำ) */
+    --category-width: max(12%, 96px);
+    --party-width: max(20%, 132px);
 }
+html.zg-screen-s #categorySidebar .category { padding-right: 18px; }
 
 /* ---------- toolbar ล้นจอ (หน้าต่างแคบ / กด Ctrl+ ซูมเบราว์เซอร์) → ขึ้นบรรทัดใหม่ ---------- */
 html.zg-toolbar-wrap .workspace-toolbar {
@@ -189,6 +192,41 @@ html.zg-toolbar-wrap .toolbar-row {
     row-gap: 4px;
 }
 html.zg-toolbar-wrap .toolbar-row-secondary { margin-top: 4px; }
+
+/* ---------- toolbar ขึ้นหลายบรรทัดจนกินจอ (หน้าต่างแคบ / ซูมเบราว์เซอร์มาก)
+   → เหลือ 2 แถว แต่ละแถวเลื่อนซ้ายขวาได้ (ล้อเมาส์ / ลากแถบ / ปัดนิ้ว) ---------- */
+html.zg-toolbar-scroll .workspace-toolbar {
+    height: auto;
+    overflow: visible;
+    padding-bottom: 4px;
+}
+html.zg-toolbar-scroll .toolbar-row {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #c3ccc7 transparent;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+/* กล่องขวาบน (ตรวจคำผิด / ค้นหา) ลอยอยู่ → แถวต้องจบก่อนกล่อง ไม่ใช่เลื่อนลอดใต้กล่อง */
+html.zg-toolbar-scroll .workspace-toolbar .toolbar-row {
+    margin-right: var(--zg-toolbar-right-space, 0px);
+    padding-right: 0;
+}
+html.zg-toolbar-scroll .toolbar-row.zg-row-end {
+    -webkit-mask-image: none;
+            mask-image: none;
+}
+html.zg-toolbar-scroll .toolbar-row::-webkit-scrollbar { height: 5px; }
+html.zg-toolbar-scroll .toolbar-row::-webkit-scrollbar-thumb { background: #c3ccc7; border-radius: 3px; }
+html.zg-toolbar-scroll .toolbar-row-secondary { margin-top: 2px; }
+html.zg-toolbar-scroll .toolbar-row > * { flex-shrink: 0; }
+html.zg-toolbar-scroll body.zg-dark .toolbar-row { scrollbar-color: #4a5550 transparent; }
 
 /* ---------- เลขวันบนหัวตารางแน่นเกิน → แสดงเฉพาะบางวัน ---------- */
 html.zg-days-sparse .day-number-label,
@@ -209,6 +247,8 @@ html.zg-days-minimal .day-number-label--highlight-vline {
     visibility: visible;
     font-size: 9px !important;
     overflow: visible;
+    display: flex;
+    justify-content: center;
 }
 
 /* ---------- จอแนวตั้ง ---------- */
@@ -284,8 +324,15 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
         const idealHeight =
             Math.max(BOARD_MIN_HEIGHT, Math.round(width * BOARD_RATIO));
 
-        /* สูงกว่าที่ควรเกิน 25% = จอแนวตั้ง → จำกัดความสูงกระดาน */
-        const portrait = available > idealHeight * 1.25;
+        /*
+            สูงกว่าที่ควรเกิน 25% = จอแนวตั้ง → จำกัดความสูงกระดาน
+            จอคอม (เมาส์) เช่น แบ่งครึ่งจอ 960×1040 → ใช้เต็มความสูง ไม่ขึ้นป้ายหมุนจอ
+            (หมุนจอคอมไม่ได้ และพื้นที่ว่างด้านล่างดูเหมือนหน้าพัง)
+            ยกเว้นหน้าต่างสูงมาก ๆ (สูง > 2 เท่าของกว้าง) ค่อยจำกัด
+        */
+        const portrait = isTouch
+            ? available > idealHeight * 1.25
+            : available > Math.max(idealHeight * 1.25, width * 2);
 
         root.classList.toggle("zg-portrait", portrait);
 
@@ -302,7 +349,7 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
             plan.style.bottom = "auto";
             plan.style.height = `${idealHeight}px`;
 
-            if (!hint) {
+            if (!hint && isTouch) {
 
                 hint = document.createElement("div");
 
@@ -315,7 +362,7 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
                 document.body.appendChild(hint);
             }
 
-            hint.style.top = `${toolbarHeight + idealHeight + 40}px`;
+            if (hint) hint.style.top = `${toolbarHeight + idealHeight + 40}px`;
 
         } else {
 
@@ -391,8 +438,8 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
 
         root.classList.toggle("zg-browser-zoomed", browserZoom !== 1);
 
-        /* วัดแบบไม่ wrap ก่อน */
-        root.classList.remove("zg-toolbar-wrap");
+        /* วัดแบบไม่ wrap ก่อน (ล้างโหมดแถวเลื่อนด้วย ไม่งั้นวัดได้ว่า "ไม่ล้น" แล้วสลับไปมา) */
+        root.classList.remove("zg-toolbar-wrap", "zg-toolbar-scroll");
         root.style.removeProperty("--toolbar-height");
         toolbar.style.height = "";
 
@@ -424,6 +471,18 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
 
             root.classList.add("zg-toolbar-wrap");
 
+            /*
+                ขึ้นบรรทัดแล้วสูงเกิน (เกิน ~3 แถว และเกิน 24% ของความสูงจอ)
+                → ตารางแทบไม่เหลือที่ (เช่น ซูม 175% / แบ่งครึ่งจอ) เปลี่ยนเป็น 2 แถวเลื่อนซ้ายขวาแทน
+            */
+            const wrappedHeight = toolbar.getBoundingClientRect().height;
+
+            if (wrappedHeight > Math.max(132, window.innerHeight * 0.24)) {
+                root.classList.remove("zg-toolbar-wrap");
+                root.classList.add("zg-toolbar-scroll");
+                updateRowEnds(toolbar);
+            }
+
         } else if (browserZoom !== 1) {
 
             /* toolbar ใช้ --toolbar-height เป็นความสูงตัวเองด้วย → ล็อกไว้ก่อนเปลี่ยนตัวแปร */
@@ -441,6 +500,35 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
         return height;
     }
 
+
+    /* แถว toolbar ที่เลื่อนจนสุดแล้ว → ไม่ต้องจางขอบขวา */
+    function updateRowEnds(toolbar) {
+        (toolbar || document).querySelectorAll(".workspace-toolbar .toolbar-row, .toolbar-row").forEach(row => {
+            row.classList.toggle("zg-row-end", row.scrollLeft + row.clientWidth >= row.scrollWidth - 2);
+        });
+    }
+
+    /* โหมดแถวเลื่อน: หมุนล้อเมาส์บน toolbar = เลื่อนแถวซ้ายขวา */
+    document.addEventListener("wheel", event => {
+
+        if (!root.classList.contains("zg-toolbar-scroll") || event.ctrlKey) return;
+
+        const row = event.target instanceof Element ? event.target.closest(".workspace-toolbar .toolbar-row") : null;
+
+        if (!row || row.scrollWidth <= row.clientWidth + 1) return;
+
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+        if (!delta) return;
+
+        event.preventDefault();
+        row.scrollLeft += delta;
+
+    }, { passive: false });
+
+    document.addEventListener("scroll", event => {
+        if (event.target instanceof Element && event.target.matches(".toolbar-row")) updateRowEnds();
+    }, true);
 
     /* เลขวันบนหัวตารางแคบเกินอ่าน → แสดงทุก 5 วัน หรือแค่วันที่ 1 กับ 15 */
     function updateDayDensity() {

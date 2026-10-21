@@ -201,7 +201,30 @@
 .zg-pre-foot { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
 .zg-pre-foot button { height: 26px; padding: 0 9px; border: 1px solid #dfe5e1; border-radius: 7px; background: #fff; font-size: 11.5px; cursor: pointer; color: inherit; }
 .zg-pre-foot button:hover { border-color: #f2c94c; }
-.zg-pre-hint { margin-top: 8px; font-size: 10.5px; color: #8a948f; line-height: 1.5; }
+.zg-pre-hint { margin-top: 8px; font-size: 10.5px; color: #6f7873; line-height: 1.5; }
+.zg-pre-place {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 10px; padding: 6px 8px;
+    border: 1px solid #e3e8e5; border-radius: 9px; background: #fbfcfb;
+}
+.zg-pre-place.is-set { border-color: #f2c94c; background: #fffbea; }
+.zg-pre-place-label { flex: none; font-size: 11.5px; font-weight: 700; color: #3d4541; }
+.zg-pre-place input {
+    flex: 1; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid #dde3e0; border-radius: 7px;
+    background: #fff; color: #1e2924; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.zg-pre-place input:focus { outline: none; border-color: #dca503; box-shadow: 0 0 0 3px rgba(242, 183, 5, .2); }
+.zg-pre-place-clear {
+    flex: none; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent;
+    color: #6f7873; font-size: 12px; cursor: pointer;
+}
+.zg-pre-place-clear:hover { background: #f0f4f2; color: #1e2924; }
+.zg-pre-place-clear[hidden] { display: none; }
+.zg-pre-place-note { margin: -6px 2px 10px; font-size: 10.5px; color: #6f7873; line-height: 1.45; }
+body.zg-dark .zg-pre-place { background: #2b3330; border-color: #3a4440; }
+body.zg-dark .zg-pre-place.is-set { background: #3a3420; border-color: #8a7420; }
+body.zg-dark .zg-pre-place-label { color: #e3e9e5; }
+body.zg-dark .zg-pre-place input { background: #222a27; border-color: #3a4440; color: #e3e9e5; }
+body.zg-dark .zg-pre-place-note { color: #a9b4ae; }
 
 .zg-pre-ask { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin-bottom: 10px; border-radius: 10px; background: #fff9e6; border: 1px solid #f4e2a6; }
 .zg-pre-ask input { height: 30px; padding: 0 8px; border: 1px solid #d9cfa8; border-radius: 7px; font: inherit; font-size: 12.5px; }
@@ -940,8 +963,51 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             `「${preset.name}」を配置しました — まとめて移動できます · Ctrl+Z で元に戻す`));
     }
 
-    /* คลิกการ์ด = วางตรงช่วงที่เห็นบนจอ (เว้นจากขอบซ้ายนิดหน่อย) */
+    /* วันที่ที่เลือกในแผง "📅 วางที่" (null = วางตรงช่วงที่เห็นบนจอ) */
+    let placeDate = null;
+
+    function plusDays(date, days) {
+        const result = new Date(date);
+        result.setDate(result.getDate() + days);
+        return result;
+    }
+
+    /* วางชุดเริ่มที่วันที่เลือก — นอกช่วงตาราง → ขยายช่วงให้ก่อน แล้วเลื่อนจอไปให้เห็น */
+    function placeAtDate(preset, date) {
+
+        const span = presetSpan(preset);
+        let changed = false;
+
+        if (dayNumber(date) < startDay()) {
+            timelineStartDate = plusDays(date, -3);
+            changed = true;
+        }
+
+        if (dayNumber(date) + span + 3 > dayNumber(timelineEndDate)) {
+            timelineEndDate = plusDays(date, span + 7);
+            changed = true;
+        }
+
+        if (changed) {
+            if (typeof syncDateInputs === "function") syncDateInputs();
+            renderSchedule();
+        }
+
+        const day = dayNumber(date) - startDay();
+        const top = rowTopAtOrBelow(verticalScrollY);
+
+        timelineViewport.scrollLeft = Math.max(0, day * ppd() - Math.min(120, timelineViewport.clientWidth * 0.12));
+        timelineViewport.dispatchEvent(new Event("scroll"));
+
+        placePreset(preset, day, top);
+    }
+
+    /* คลิกการ์ด = วางตรงวันที่เลือกไว้ หรือช่วงที่เห็นบนจอ (เว้นจากขอบซ้ายนิดหน่อย) */
     function placeInView(preset) {
+        if (placeDate) {
+            placeAtDate(preset, placeDate);
+            return;
+        }
         const perDay = ppd();
         const day = Math.round((timelineViewport.scrollLeft + Math.min(120, timelineViewport.clientWidth * 0.12)) / perDay);
         const top = rowTopAtOrBelow(verticalScrollY);
@@ -2055,6 +2121,28 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         panel.style.top = `${rect.bottom + 6}px`;
     }
 
+    function placeNote() {
+        if (!placeDate) {
+            return L("ยังไม่เลือกวัน → คลิกการ์ด = วางตรงช่วงที่เห็นบนจอ",
+                "No date → click a card to place it in view",
+                "日付なし → 表示中の位置に配置");
+        }
+        const day = dayNumber(placeDate) - startDay();
+        return L(`คลิกการ์ด = วางเริ่ม ${dayLabel(day)} (นอกช่วงตาราง → ขยายช่วงให้อัตโนมัติ)`,
+            `Click a card to place it starting ${dayLabel(day)}`,
+            `カードをクリック → ${dayLabel(day)} から配置`);
+    }
+
+    function paintPlace() {
+        if (!panel) return;
+        const box = panel.querySelector(".zg-pre-place");
+        const clear = panel.querySelector("[data-place-clear]");
+        const note = panel.querySelector("[data-place-note]");
+        if (box) box.classList.toggle("is-set", Boolean(placeDate));
+        if (clear) clear.hidden = !placeDate;
+        if (note) note.textContent = placeNote();
+    }
+
     function renderPanel() {
 
         if (!panel) return;
@@ -2079,6 +2167,13 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             <button type="button" class="zg-pre-save" data-save ${count ? "" : "disabled"}>${escapeHtml(count
                 ? L(`＋ บันทึกที่เลือกเป็นชุด (${count} ชิ้น)`, `＋ Save selection as a set (${count})`, `＋ 選択をセットとして保存 (${count})`)
                 : L("ลากคลุม object ในตารางก่อน แล้วกดบันทึก", "Drag a box around objects first, then save", "先に範囲選択してから保存"))}</button>`}
+            ${list.length ? `
+            <label class="zg-pre-place ${placeDate ? "is-set" : ""}">
+                <span class="zg-pre-place-label">📅 ${escapeHtml(L("วางที่วันที่", "Place on", "配置日"))}</span>
+                <input type="date" data-place value="${placeDate ? formatDateInputValue(placeDate) : ""}" aria-label="${escapeHtml(L("วันที่จะวางชุด", "Date to place the set", "配置する日付"))}">
+                <button type="button" class="zg-pre-place-clear" data-place-clear ${placeDate ? "" : "hidden"} title="${escapeHtml(L("ล้างวันที่ (กลับไปวางตรงช่วงที่เห็น)", "Clear (place in view)", "クリア"))}">✕</button>
+            </label>
+            <div class="zg-pre-place-note" data-place-note>${escapeHtml(placeNote())}</div>` : ""}
             ${list.length ? `<div class="zg-pre-grid">${list.map(item => `
                 <div class="zg-pre-card" data-id="${escapeHtml(item.id)}">
                     ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" alt="">` : `<img alt="">`}
@@ -2091,7 +2186,7 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                 <button type="button" data-export title="ดาวน์โหลดชุดของฉันเป็นไฟล์">⬆ Export</button>
                 <button type="button" data-import title="เพิ่มชุดจากไฟล์">⬇ Import</button>
             </div>
-            <div class="zg-pre-hint">คลิก = วางตรงช่วงที่เห็น · ลากไปวาง = วางตรงวัน / แถวที่ปล่อย<br>วางแล้วลากย้ายได้ทั้งชุด · Alt + คลิก = เลือกชิ้นเดียว</div>`;
+            <div class="zg-pre-hint">คลิก = วางตรงวันที่เลือก (ว่าง = ช่วงที่เห็น) · ลากไปวาง = วางตรงวัน / แถวที่ปล่อย<br>วางแล้วลากย้ายได้ทั้งชุด · Alt + คลิก = เลือกชิ้นเดียว</div>`;
 
         if (asking) {
             const input = panel.querySelector("[data-name]");
@@ -2143,6 +2238,14 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             if (target.closest("[data-cancel]")) { asking = false; renderPanel(); return; }
             if (target.closest("[data-ok]")) { confirmSave(); return; }
             if (target.closest("[data-export]")) { exportLocal(); return; }
+            if (target.closest("[data-place-clear]")) {
+                event.preventDefault();
+                placeDate = null;
+                const input = panel.querySelector("[data-place]");
+                if (input) input.value = "";
+                paintPlace();
+                return;
+            }
             if (target.closest("[data-import]")) { importFile(); return; }
 
             const del = target.closest("[data-del]");
@@ -2157,6 +2260,15 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         });
 
         panel.addEventListener("pointerdown", startCardDrag);
+
+        /* 📅 วางที่วันที่ */
+        const onPlace = event => {
+            if (!(event.target instanceof Element) || !event.target.matches("[data-place]")) return;
+            placeDate = toDate(event.target.value) || null;
+            paintPlace();
+        };
+        panel.addEventListener("input", onPlace);
+        panel.addEventListener("change", onPlace);
 
         /* ชี้การ์ด → ดูทั้งชุดในหน้าต่างลอยด้านข้าง */
         panel.addEventListener("mouseover", event => {

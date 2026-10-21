@@ -197,11 +197,16 @@ const TIMELINE_SCROLL_STEP = 160;
 */
 const BASE_PX_PER_DAY = 6;
 
-const VISIBLE_MONTHS_DEFAULT = 6;
+/*
+    จำนวนเดือนที่เห็นเต็มจอที่ซูม 100%
+    v2: 6 → 3 (ช่องวันกว้างขึ้น 2 เท่า — เลขวัน / ข้อความในกล่องงานไม่ล้นช่อง)
+*/
+const VISIBLE_MONTHS_DEFAULT = 3;
 
 const ZOOM_STEP = 0.1;
 
-const ZOOM_MIN = 0.4;
+/* 0.2 = ความหนาแน่นเท่าซูม 40% แบบเดิม (ก่อนขยายช่องวัน 2 เท่า) */
+const ZOOM_MIN = 0.2;
 
 const ZOOM_MAX = 2.5;
 
@@ -1325,7 +1330,7 @@ function createDayLabel(
 
 
     label.style.fontSize =
-        `${clamp(pxPerDay * 0.55, 5, 9)}px`;
+        `${clamp(pxPerDay * 0.6, 6, 11)}px`;
 
 
     /*

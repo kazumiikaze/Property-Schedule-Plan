@@ -317,7 +317,7 @@
 }
 .zg-start__view-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
 .zg-start__view-sub { color: #6f7873; font-size: 12.5px; margin-bottom: 14px; }
-.zg-start__tpl-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.zg-start__tpl-list { display: flex; flex-direction: column; gap: 8px; max-height: min(300px, 34vh); overflow-y: auto; }
 .zg-start__tpl {
     display: flex;
     align-items: center;
@@ -567,6 +567,7 @@ body.zg-exporting .zg-start { display: none !important; }
                         <label class="zg-start__label" for="zgStartTplName">ชื่อแผน (เช่น ชื่อลูกค้า / โครงการ)</label>
                         <input type="text" id="zgStartTplName" class="zg-start__input" maxlength="80" value="${escapeText(selected.name)}">
                     </div>
+                    <div class="zg-start__field zg-start__place"></div>
                     <div class="zg-start__error"></div>
                     <div class="zg-start__actions">
                         <button type="button" class="zg-start__btn" data-action="home">ยกเลิก</button>
@@ -579,6 +580,36 @@ body.zg-exporting .zg-start { display: none !important; }
         const nameInput = root.querySelector("#zgStartTplName");
 
         let nameTouched = false;
+
+        /* วันที่จะวางแผน (เลื่อนทั้งแผนไปเริ่มวันนั้น) — วาดใหม่ตามเทมเพลตที่เลือก */
+        const placeBox = root.querySelector(".zg-start__place");
+        let place = null;
+
+        function paintPlace() {
+
+            if (!placeBox || !selected || !window.ZGPlanShift) return;
+
+            const shift = window.ZGPlanShift;
+            const sourceStart = shift.dataStart(selected.data);
+
+            if (!sourceStart) {
+                placeBox.hidden = true;
+                place = null;
+                return;
+            }
+
+            const keep = place ? place.get() : null;
+
+            placeBox.hidden = false;
+            place = shift.picker(placeBox, {
+                sourceStart,
+                sourceEnd: shift.dataEnd(selected.data),
+                /* แผนใหม่จากหน้าเริ่มต้น → ค่าเริ่มต้น = ต้นเดือนนี้ */
+                initial: keep || new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+            });
+        }
+
+        paintPlace();
 
         if (nameInput) {
 
@@ -605,6 +636,8 @@ body.zg-exporting .zg-start { display: none !important; }
                 if (nameInput && !nameTouched) {
                     nameInput.value = selected.name;
                 }
+
+                paintPlace();
             });
 
             button.addEventListener("dblclick", () => createFromTemplate());
@@ -623,6 +656,10 @@ body.zg-exporting .zg-start { display: none !important; }
             if (problem) {
                 showError(`เทมเพลตเสียหาย: ${problem}`);
                 return;
+            }
+
+            if (place && window.ZGPlanShift) {
+                window.ZGPlanShift.shiftData(data, place.days());
             }
 
             createPlanFromData(name, data, `สร้างแผน "${name}" จากเทมเพลตแล้ว`);

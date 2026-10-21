@@ -255,9 +255,10 @@ body {
 .toolbar-label {
     margin: 0 2px;
 
-    color: #7a827e;
+    /* #7a827e เดิม ~3.7:1 บนพื้นกลุ่ม → เข้มขึ้นให้ผ่าน WCAG AA (ตัวเล็ก 10px) */
+    color: #5b6560;
 
-    font-size: 10px;
+    font-size: 11px;
 
     white-space: nowrap;
 }
@@ -2155,7 +2156,7 @@ body {
 
     color: #333b37;
 
-    font-size: 10px;
+    font-size: 11px;
 
     cursor: pointer;
 
@@ -2564,7 +2565,7 @@ body {
 
     font-size:
         clamp(
-            9px,
+            10px,
             .85vw,
             17px
         );
@@ -2617,7 +2618,7 @@ body {
 
 
     .footer-contact {
-        font-size: 9px;
+        font-size: 10px;
     }
 
 

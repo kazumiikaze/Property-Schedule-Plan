@@ -310,7 +310,10 @@
     background: rgba(20, 30, 25, .28);
 }
 .zg-tpl-dialog {
-    width: 300px;
+    width: 340px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    box-sizing: border-box;
     max-width: calc(100vw - 24px);
     padding: 14px;
     display: flex;
@@ -561,6 +564,7 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
                 <div class="zg-tpl-dialog-label">ชื่อแผนใหม่</div>
                 <input type="text" class="zg-tpl-plan-name" maxlength="80" value="${escapeText(template.name)}">
             </div>
+            <div class="zg-tpl-place"></div>
             <div class="zg-tpl-dialog-actions">
                 <button type="button" class="zg-tpl-cancel">ยกเลิก</button>
                 <button type="button" class="zg-tpl-ok">ใช้เทมเพลต</button>
@@ -570,6 +574,11 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
             const mode = dialog.querySelector("input[name='zgTplMode']:checked").value;
 
             const data = JSON.parse(JSON.stringify(template.data));
+
+            /* v9: เลื่อนทั้งแผนไปเริ่มวันที่เลือก (งาน เส้น รูป ตามไปครบ) */
+            if (place && window.ZGPlanShift) {
+                window.ZGPlanShift.shiftData(data, place.days());
+            }
 
             if (window.ZGPlanIO.validate) {
 
@@ -602,6 +611,17 @@ body.zg-exporting .zg-tpl-menu { display: none !important; }
 
         /* แทนที่แผน → ไม่ต้องใช้ชื่อ */
         const dialog = overlay.firstElementChild;
+
+        /* เลือกวันที่จะวางแผน (ค่าเริ่มต้น = วันเริ่มของผังที่เปิดอยู่) */
+        const placeBox = dialog.querySelector(".zg-tpl-place");
+        const place = placeBox && window.ZGPlanShift && window.ZGPlanShift.dataStart(template.data)
+            ? window.ZGPlanShift.picker(placeBox, {
+                sourceStart: window.ZGPlanShift.dataStart(template.data),
+                sourceEnd: window.ZGPlanShift.dataEnd(template.data)
+            })
+            : null;
+
+        if (!place && placeBox) placeBox.remove();
         const nameBox = dialog.querySelector(".zg-tpl-plan-name").parentElement;
 
         dialog.querySelectorAll("input[name='zgTplMode']").forEach(radio => {
