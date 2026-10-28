@@ -338,6 +338,38 @@
 .zg-start__tpl-name { font-weight: 700; font-size: 13.5px; }
 .zg-start__tpl-meta { color: #8a938d; font-size: 11px; margin-top: 2px; }
 .zg-start__badge { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #e5f0e9; color: #1e7a46; font-size: 10px; font-weight: 700; }
+/* เทมเพลต: รายการซ้าย · ภาพตัวอย่างขวา (ภาพเดียวกับตัวอย่างในหน้าเว็บ) */
+.zg-start__panel--tpl { max-width: 1060px; }
+.zg-start__tpl-wrap { display: grid; grid-template-columns: minmax(230px, 290px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.zg-start__tpl-wrap .zg-start__tpl-list { max-height: min(420px, 46vh); padding: 2px; }
+.zg-start__pv { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.zg-start__pv-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.zg-start__pv-name { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zg-start__pv-full {
+    flex: none; height: 28px; padding: 0 10px; border: 1px solid #dde3e0; border-radius: 8px;
+    background: #ffffff; color: #2f3a34; font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.zg-start__pv-full:hover:not(:disabled) { border-color: #9fd0aa; background: #f6fbf7; }
+.zg-start__pv-full:disabled { opacity: .45; cursor: default; }
+.zg-start__pv-box {
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 16 / 9; width: 100%; box-sizing: border-box; overflow: hidden;
+    border: 1px solid #e3e8e5; border-radius: 12px; background: #f6f8f7; cursor: zoom-in;
+}
+.zg-start__pv-box:has(img) { aspect-ratio: auto; }
+.zg-start__pv-box img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; background: #ffffff; }
+.zg-start__pv-wait { padding: 20px; color: #8a938d; font-size: 12px; line-height: 1.6; text-align: center; }
+.zg-start__pv-wait::before {
+    content: ""; display: block; width: 22px; height: 22px; margin: 0 auto 8px; border-radius: 50%;
+    border: 3px solid #dfe8e2; border-top-color: #3a8a4f; animation: zgStartSpin .8s linear infinite;
+}
+.zg-start__pv-wait.is-error::before { display: none; }
+@keyframes zgStartSpin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) {
+    .zg-start__tpl-wrap { grid-template-columns: 1fr; }
+    .zg-start__tpl-wrap .zg-start__tpl-list { max-height: 30vh; }
+}
+@media (prefers-reduced-motion: reduce) { .zg-start__pv-wait::before { animation-duration: 2.4s; } }
 .zg-start__empty { padding: 18px; color: #8a938d; text-align: center; line-height: 1.6; }
 .zg-start__field { margin-top: 14px; }
 .zg-start__label { display: block; color: #6f7873; font-size: 11.5px; margin-bottom: 4px; }
@@ -387,6 +419,8 @@ body.zg-dark .zg-start__close { background: #222a27; border-color: #3a4440; colo
 body.zg-dark .zg-start__icon,
 body.zg-dark .zg-start__back { background: #2b3330; color: #e3e9e5; }
 body.zg-dark .zg-start__tpl.selected { background: #26372d; }
+body.zg-dark .zg-start__pv-box { background: #1b2220; border-color: #3a4440; }
+body.zg-dark .zg-start__pv-full { background: #222a27; border-color: #3a4440; color: #e3e9e5; }
 
 body.zg-exporting .zg-start { display: none !important; }
 
@@ -542,12 +576,13 @@ body.zg-exporting .zg-start { display: none !important; }
         let selected = list[0] || null;
 
         root.innerHTML = `
-            <div class="zg-start__panel zg-start__panel--sub">
+            <div class="zg-start__panel zg-start__panel--sub ${list.length ? "zg-start__panel--tpl" : ""}">
                 <div class="zg-start__view">
                     <button type="button" class="zg-start__back" data-action="home">← กลับ</button>
                     <div class="zg-start__view-title">📋 เริ่มจากเทมเพลต</div>
-                    <div class="zg-start__view-sub">เลือกเทมเพลต ตั้งชื่อแผน แล้วกดสร้าง</div>
+                    <div class="zg-start__view-sub">เลือกเทมเพลต ดูตัวอย่าง ตั้งชื่อแผน แล้วกดสร้าง</div>
 
+                    <div class="${list.length ? "zg-start__tpl-wrap" : ""}">
                     <div class="zg-start__tpl-list">
                         ${list.length ? list.map((item, index) => `
                             <button type="button" class="zg-start__tpl ${index === 0 ? "selected" : ""}" data-tpl-id="${escapeText(item.id)}">
@@ -560,6 +595,15 @@ body.zg-exporting .zg-start { display: none !important; }
                         `).join("") : `
                             <div class="zg-start__empty">ยังไม่มีเทมเพลต<br>เปิดไฟล์เทมเพลต .json ได้จากการ์ด "เปิดไฟล์ .json"</div>
                         `}
+                    </div>
+                    ${list.length ? `
+                    <div class="zg-start__pv">
+                        <div class="zg-start__pv-head">
+                            <span class="zg-start__pv-name"></span>
+                            <button type="button" class="zg-start__pv-full" disabled title="ดูภาพตัวอย่างขนาดจริง">🔍 ดูขนาดจริง</button>
+                        </div>
+                        <div class="zg-start__pv-box" title="คลิกเพื่อดูขนาดจริง"></div>
+                    </div>` : ""}
                     </div>
 
                     ${list.length ? `
@@ -604,12 +648,54 @@ body.zg-exporting .zg-start { display: none !important; }
             place = shift.picker(placeBox, {
                 sourceStart,
                 sourceEnd: shift.dataEnd(selected.data),
-                /* แผนใหม่จากหน้าเริ่มต้น → ค่าเริ่มต้น = ต้นเดือนนี้ */
+                /* แผนใหม่จากหน้าเริ่มต้น → เริ่มต้นเดือนนี้ (เทมเพลตจำแค่การจัดวาง ไม่จำวันที่) */
                 initial: keep || new Date(new Date().getFullYear(), new Date().getMonth(), 1)
             });
         }
 
         paintPlace();
+
+        /* ภาพตัวอย่างของเทมเพลตที่เลือก (template-preview.js — วาดจากเทมเพลตจริง แบบเดียวกับในหน้าเว็บ) */
+        const pvName = root.querySelector(".zg-start__pv-name");
+        const pvBox = root.querySelector(".zg-start__pv-box");
+        const pvFull = root.querySelector(".zg-start__pv-full");
+
+        function paintPreview() {
+
+            if (!pvBox || !selected) return;
+
+            const template = selected;
+            const api = window.ZGTemplatePreview;
+
+            pvName.textContent = template.name;
+            pvFull.disabled = true;
+
+            if (!api || typeof api.render !== "function") {
+                pvBox.innerHTML = `<div class="zg-start__pv-wait is-error">ดูตัวอย่างไม่ได้ในหน้านี้</div>`;
+                return;
+            }
+
+            pvBox.innerHTML = `<div class="zg-start__pv-wait">กำลังสร้างภาพตัวอย่าง…</div>`;
+
+            api.render(template).then(result => {
+                if (selected !== template || !pvBox.isConnected) return;
+                pvBox.innerHTML = `<img alt="ตัวอย่างเทมเพลต ${escapeText(template.name)}" src="${result.src}">`;
+                pvFull.disabled = false;
+            }).catch(error => {
+                if (selected !== template || !pvBox.isConnected) return;
+                pvBox.innerHTML = `<div class="zg-start__pv-wait is-error">สร้างภาพตัวอย่างไม่ได้ — ${escapeText(error && error.message ? error.message : String(error))}</div>`;
+            });
+        }
+
+        function openFullPreview() {
+            if (selected && !pvFull.disabled && window.ZGTemplatePreview) window.ZGTemplatePreview.open(selected.id);
+        }
+
+        if (pvBox) {
+            pvFull.addEventListener("click", openFullPreview);
+            pvBox.addEventListener("click", openFullPreview);
+            paintPreview();
+        }
 
         if (nameInput) {
 
@@ -638,6 +724,7 @@ body.zg-exporting .zg-start { display: none !important; }
                 }
 
                 paintPlace();
+                paintPreview();
             });
 
             button.addEventListener("dblclick", () => createFromTemplate());
@@ -683,7 +770,7 @@ body.zg-exporting .zg-start { display: none !important; }
                 <div class="zg-start__view">
                     <button type="button" class="zg-start__back" data-action="home">← กลับ</button>
                     <div class="zg-start__view-title">＋ สร้างแผนเปล่า</div>
-                    <div class="zg-start__view-sub">ได้กระดานว่าง 3 หมวดหมู่ ช่วงเวลา 12 เดือนนับจากเดือนนี้</div>
+                    <div class="zg-start__view-sub">ได้กระดานว่าง 3 หมวดหมู่ ช่วงเวลา 1 ต.ค. – 28 ก.พ. (เปลี่ยนวันได้ที่การ์ดช่วงเวลา)</div>
 
                     <div class="zg-start__field">
                         <label class="zg-start__label" for="zgStartBlankName">ชื่อแผน (เช่น ชื่อลูกค้า / โครงการ)</label>

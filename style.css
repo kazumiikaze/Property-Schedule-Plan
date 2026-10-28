@@ -32,8 +32,9 @@ body {
     --grid-line-color: #777777;
     --grid-line-width: 1px;
 
-    --category-width: 8%;
-    --party-width: 15%;
+    /* v2: ชื่อหมวด 8% → 6.5% · หัวข้อแถว 15% → 10% (ตารางได้ที่เพิ่ม ช่องวันกว้างขึ้น) */
+    --category-width: 6.5%;
+    --party-width: 10%;
 
     --timeline-left:
         calc(
@@ -732,12 +733,8 @@ body {
 
     text-align: center;
 
-    font-size:
-        clamp(
-            9px,
-            .75vw,
-            16px
-        );
+    /* ค่าเริ่มต้น 15px (ผู้ใช้ปรับเองได้ด้วย A− / A+) */
+    font-size: 15px;
 
     font-weight: 700;
 
@@ -906,14 +903,10 @@ body {
 
     overflow: hidden;
 
-    font-size:
-        clamp(
-            7px,
-            .5vw,
-            12px
-        );
+    /* ค่าเริ่มต้น 15px (ผู้ใช้ปรับเองได้ด้วย A− / A+) */
+    font-size: 15px;
 
-    line-height: 1.1;
+    line-height: 1.15;
 
     outline: none;
 
@@ -930,14 +923,10 @@ body {
 
     overflow: hidden;
 
-    font-size:
-        clamp(
-            6px,
-            .34vw,
-            9px
-        );
+    /* บรรทัดบทบาท: รองลงมา */
+    font-size: 11px;
 
-    line-height: 1;
+    line-height: 1.1;
 
     color: #777777;
 
@@ -1198,6 +1187,9 @@ body {
 /* ชั้นนอก: ตัดขอบ ไม่ขยับ */
 .object-layer-viewport {
     position: absolute;
+
+    /* ตารางมีเส้นขอบบน → เลื่อนชั้นกล่องงานลงเท่าเส้นขอบ ให้ y = 0 ตรงเส้นหมวดพอดี */
+    margin-top: var(--grid-line-width, 1px);
 
     left: calc(.5% + var(--timeline-left));
     right: .5%;
@@ -2049,7 +2041,7 @@ body {
 
 
 .note-header {
-    min-height: 27px;
+    min-height: 34px;
 
     padding:
         8px
@@ -2059,7 +2051,8 @@ body {
 
     color: #1e2924;
 
-    font-size: 12px;
+    /* ค่าเริ่มต้น 18px (ผู้ใช้ปรับเองได้ด้วย A− / A+) */
+    font-size: 18px;
     font-weight: 700;
 
     outline: none;
@@ -2067,7 +2060,7 @@ body {
 
 
 .note-body {
-    height: calc(100% - 27px);
+    height: calc(100% - 34px);
 
     padding:
         2px
@@ -2078,7 +2071,8 @@ body {
 
     color: #333333;
 
-    font-size: 11px;
+    /* ค่าเริ่มต้น 18px (ผู้ใช้ปรับเองได้ด้วย A− / A+) */
+    font-size: 18px;
 
     line-height: 1.35;
 
@@ -2508,6 +2502,14 @@ body {
     transform: translateY(0);
 }
 
+/* v2: แถบบริษัทแสดงตลอด (ไม่ซ่อนลงล่าง) · อยู่ใต้กล่อง Update (z 130) ที่วางอยู่ในแถบเดียวกันด้านขวา */
+.company-footer {
+    transform: none !important;
+    box-shadow: none;
+    z-index: 120;
+}
+.bottom-hot-zone { display: none !important; }
+
 
 .company-footer-inner {
     width: 100%;
@@ -2532,7 +2534,7 @@ body {
     display: block;
 
     width: auto;
-    height: 40px;
+    height: 46px;
 
     object-fit: contain;
 }
@@ -2577,6 +2579,34 @@ body {
     color: #a0a0a0;
 }
 
+/* ชื่อบริษัท + คำโปรย ข้างโลโก้ (ขนาดตามตัวอักษรแถบ → ตอนพิมพ์ใหญ่ตามเอง) */
+.footer-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-left: 14px;
+    font-size: clamp(9px, .85vw, 17px);
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+.footer-brand-name {
+    font-family: "Century Gothic", "Questrial", "Avenir Next", "Segoe UI", Arial, sans-serif;
+    font-size: 1.32em;
+    font-weight: 400;
+    letter-spacing: .04em;
+    color: #8cc63f;
+}
+
+.footer-brand-tag {
+    margin-top: .28em;
+    font-family: "Century Gothic", "Segoe UI", Arial, sans-serif;
+    font-size: .66em;
+    font-weight: 400;
+    letter-spacing: .03em;
+    color: #4f5853;
+}
+
 
 /* =========================================================
    RESPONSIVE
@@ -2585,8 +2615,8 @@ body {
 @media (max-width: 1200px) {
 
     :root {
-        --category-width: 10%;
-        --party-width: 19%;
+        --category-width: 8%;
+        --party-width: 13%;
     }
 
 
@@ -2606,8 +2636,8 @@ body {
 @media (max-width: 900px) {
 
     :root {
-        --category-width: 13%;
-        --party-width: 24%;
+        --category-width: 11%;
+        --party-width: 17%;
     }
 
 

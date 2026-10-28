@@ -351,7 +351,10 @@ body.zg-exporting .zg-obj-selected::before { background: transparent !important;
         let dy = 0;
 
         if (lead.type === "dateline" || lead.type === "vline") {
-            dayShift = state.originDate ? diffDays(state.originDate, lead.linkedHeaderDate) : 0;
+            /* เส้นวันที่ลากได้อิสระ (ระหว่างวัน) → ชิ้นอื่นเลื่อนตามเท่ากันเป๊ะ ไม่ปัดเป็นวัน */
+            dayShift = state.originDate
+                ? (dateToLeft(lead.linkedHeaderDate) - dateToLeft(state.originDate)) / pxPerDay
+                : 0;
         } else {
             dayShift = (lead.x - state.originX) / pxPerDay;
             dy = lead.type === "task" ? lead.y - state.originY : 0;
@@ -363,7 +366,7 @@ body.zg-exporting .zg-obj-selected::before { background: transparent !important;
 
             if (object.type === "dateline" || object.type === "vline") {
 
-                if (item.date) object.linkedHeaderDate = addDaysSafe(item.date, Math.round(dayShift));
+                if (item.date) object.linkedHeaderDate = new Date(item.date.getTime() + dayShift * 86400000);
 
             } else if (object.type === "task") {
 
@@ -381,6 +384,14 @@ body.zg-exporting .zg-obj-selected::before { background: transparent !important;
     }
 
     document.addEventListener("mouseup", () => { group = null; }, true);
+
+    /* drag-autoscroll.js ขยายตารางไปทางซ้ายระหว่างลาก → เนื้อหาเลื่อนขวา ตำแหน่งตั้งต้นของกลุ่มต้องเลื่อนตาม */
+    window.addEventListener("zg:timeline-shift", event => {
+        const px = event.detail && Number(event.detail.px);
+        const ratio = event.detail && Number(event.detail.ratio) > 0 ? Number(event.detail.ratio) : 1;
+        if (!group || !Number.isFinite(px)) return;
+        group.items.forEach(item => { if (Number.isFinite(item.x)) item.x = item.x * ratio + px; });
+    });
 
 
     function rowSlots() {
@@ -872,7 +883,7 @@ body.zg-exporting .zg-obj-selected::before { background: transparent !important;
                     button.type = "button";
                     button.className = "zg-date-menu-btn";
 
-                    const text = object.type === "task" ? describeTask(object) : fmt(new Date(object.linkedHeaderDate || timelineStartDate));
+                    const text = object.type === "task" ? describeTask(object) : fmt(typeof displayDateOf === "function" ? displayDateOf(object.linkedHeaderDate || timelineStartDate) : new Date(object.linkedHeaderDate || timelineStartDate));
 
                     button.textContent = `📅 แก้วันที่ · ${text}`;
                     button.title = "แก้วันที่เป็นตัวเลข (หรือดับเบิลคลิกที่ object)";

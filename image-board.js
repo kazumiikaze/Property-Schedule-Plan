@@ -391,7 +391,14 @@
 .zg-bimg.has-border { border: 2px solid #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, .22); }
 .zg-bimg.is-round { border-radius: 12px; }
 .zg-bimg.is-round img { border-radius: 10px; }
-.zg-bimg.is-locked { pointer-events: none; cursor: default; }
+/* ล็อก = ย้าย/ยืดไม่ได้ แต่คลิกเลือกเพื่อแก้ไข ปลดล็อก หรือลบได้ */
+.zg-bimg.is-locked { cursor: pointer; }
+.zg-bimg.is-locked.is-selected { outline-style: dashed; }
+.zg-bimg-lockbadge {
+    position: absolute; right: 4px; top: 4px; padding: 1px 5px; border-radius: 6px;
+    background: rgba(30, 41, 36, .78); color: #fff; font-size: 10px; line-height: 16px; pointer-events: none;
+}
+body.zg-exporting .zg-bimg-lockbadge { display: none !important; }
 .zg-bimg:hover:not(.is-selected) { outline: 1px dashed rgba(58, 138, 79, .7); outline-offset: 2px; }
 .zg-bimg.is-selected { outline: 2px solid #3a8a4f; outline-offset: 2px; }
 .zg-bimg-handle {
@@ -408,6 +415,13 @@
 .zg-bimg-handle[data-dir="ne"] { right: -8px; top: -8px;    cursor: nesw-resize; }
 .zg-bimg-handle[data-dir="sw"] { left: -8px;  bottom: -8px; cursor: nesw-resize; }
 .zg-bimg-handle[data-dir="se"] { right: -8px; bottom: -8px; cursor: nwse-resize; }
+/* ด้านข้าง: ยืด / หด กว้างหรือสูงอย่างเดียว (กรอบไม่ต้องเท่าสัดส่วนรูป) */
+.zg-bimg-handle[data-dir="n"], .zg-bimg-handle[data-dir="s"] { left: calc(50% - 9px); width: 18px; height: 8px; border-radius: 4px; cursor: ns-resize; }
+.zg-bimg-handle[data-dir="e"], .zg-bimg-handle[data-dir="w"] { top: calc(50% - 9px); width: 8px; height: 18px; border-radius: 4px; cursor: ew-resize; }
+.zg-bimg-handle[data-dir="n"] { top: -5px; }
+.zg-bimg-handle[data-dir="s"] { bottom: -5px; }
+.zg-bimg-handle[data-dir="e"] { right: -5px; }
+.zg-bimg-handle[data-dir="w"] { left: -5px; }
 .zg-bimg-size {
     position: absolute;
     right: 0;
@@ -794,8 +808,11 @@ body.zg-exporting .zg-img-toast { display: none !important; }
         const g = geometry();
         const unit = unitFor(zone, g);
 
+        /* day-fold.js: px บนจอ → ตำแหน่งจริง (มีวันที่ซ่อน / รวบอยู่) */
+        const realLeft = window.ZGFold ? window.ZGFold.inv(left) : left;
+
         return {
-            day: g.startDay + left / g.ppd,
+            day: g.startDay + realLeft / g.ppd,
             wDays: Math.max(0.2, width / g.ppd),
             row: top / unit,
             hRows: Math.max(0.02, height / unit)
@@ -846,6 +863,7 @@ body.zg-exporting .zg-img-toast { display: none !important; }
             locked: Boolean(raw.locked),
             name: typeof raw.name === "string" ? raw.name.slice(0, 80) : "",
             ...(raw.zone === "bracket" ? { zone: "bracket" } : {}),
+            ...(raw.free ? { free: true } : {}),
             ...(raw.sticker ? { sticker: true } : {})
         };
     }
@@ -872,12 +890,32 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
         const unit = unitFor(item.zone, g);
 
-        return {
-            left: (item.day - g.startDay) * g.ppd,
+        const realLeft = (item.day - g.startDay) * g.ppd;
+
+        const box = {
+            /* day-fold.js: วาดตามแกนวันที่ที่ซ่อน / รวบ (ขนาดรูปเท่าเดิม) */
+            left: window.ZGFold ? window.ZGFold.x(realLeft) : realLeft,
             top: item.row * unit,
             width: item.wDays * g.ppd,
             height: item.hRows * unit
         };
+
+        /*
+            กรอบพอดีรูป: ความกว้างผูกกับวัน แต่ความสูงผูกกับความสูงแถว → ซูม / ความสูงแถวเปลี่ยน
+            กรอบจะเพี้ยนจากสัดส่วนรูป (มีที่ว่างบน-ล่างหรือซ้าย-ขวา) → หดกรอบเข้าหารูป ณ จุดกึ่งกลางเดิม
+            (รูปที่เห็นอยู่ตำแหน่งและขนาดเดิมพอดี) · ผู้ใช้ยืดกรอบเองด้วยที่จับด้านข้าง (item.free) → ใช้กรอบตามนั้น
+        */
+        const ar = Number(item.ar);
+        if (!item.free && ar > 0 && box.width > 0 && box.height > 0) {
+            const width = Math.min(box.width, box.height * ar);
+            const height = width / ar;
+            box.left += (box.width - width) / 2;
+            box.top += (box.height - height) / 2;
+            box.width = width;
+            box.height = height;
+        }
+
+        return box;
     }
 
     /* ขนาด/ตำแหน่ง scroll ของเลเยอร์ = เท่ากับเลเยอร์ object ของตาราง */
@@ -931,7 +969,7 @@ body.zg-exporting .zg-img-toast { display: none !important; }
             element.classList.toggle("has-border", item.border);
             element.classList.toggle("is-round", item.round);
             element.classList.toggle("is-locked", item.locked);
-            element.classList.toggle("is-selected", item.id === selectedId && !item.locked);
+            element.classList.toggle("is-selected", item.id === selectedId);
 
             element.style.left = `${box.left}px`;
             element.style.top = `${box.top}px`;
@@ -947,9 +985,16 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
             element.appendChild(img);
 
+            if (item.id === selectedId && item.locked) {
+                const badge = document.createElement("span");
+                badge.className = "zg-bimg-lockbadge";
+                badge.textContent = "🔒 ล็อกอยู่";
+                element.appendChild(badge);
+            }
+
             if (item.id === selectedId && !item.locked) {
 
-                ["nw", "ne", "sw", "se"].forEach(dir => {
+                ["nw", "ne", "sw", "se", "n", "s", "e", "w"].forEach(dir => {
 
                     const handle = document.createElement("div");
 
@@ -1027,7 +1072,7 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
         const item = selectedId ? findImage(selectedId) : null;
 
-        if (!item || item.locked) {
+        if (!item) {
             closeBar();
             return;
         }
@@ -1053,7 +1098,8 @@ body.zg-exporting .zg-img-toast { display: none !important; }
             <button type="button" data-bar="layer" title="หลัง = อยู่หลังเส้นและกล่องงาน / หน้า = ทับเส้นและกล่องงาน">${item.layer === "front" ? "⬆ ชั้นหน้า" : "⬇ ชั้นหลัง"}</button>
             <button type="button" data-bar="border" class="${item.border ? "is-on" : ""}" title="กรอบขาว + เงา">▢ กรอบ</button>
             <button type="button" data-bar="round" class="${item.round ? "is-on" : ""}" title="มุมโค้ง">◜ มุมโค้ง</button>
-            <button type="button" data-bar="lock" title="ล็อกรูป (คลิกทะลุได้ ใช้เป็นภาพอ้างอิง) — ปลดล็อกได้ที่เมนู 🖼 รูปภาพ">🔒 ล็อก</button>
+            ${item.free ? `<button type="button" data-bar="fit" title="หดกรอบให้พอดีรูป (ตัดที่ว่างรอบรูปออก)">▣ พอดีรูป</button>` : ""}
+            <button type="button" data-bar="lock" class="${item.locked ? "is-on" : ""}" title="${item.locked ? "ปลดล็อก — กลับมาลากย้าย / ยืดได้" : "ล็อกรูป — ลากย้าย / ยืดไม่ได้ (ยังแก้ไข / ลบได้)"}">${item.locked ? "🔓 ปลดล็อก" : "🔒 ล็อก"}</button>
             <span class="zg-bimg-sep"></span>
             <button type="button" data-bar="replace" title="เปลี่ยนรูป (คงตำแหน่งและความกว้าง)">🔄</button>
             <button type="button" data-bar="download" title="บันทึกรูปลงเครื่อง">💾</button>
@@ -1154,16 +1200,20 @@ body.zg-exporting .zg-img-toast { display: none !important; }
             item.border = !item.border;
         } else if (action === "round") {
             item.round = !item.round;
+        } else if (action === "fit") {
+            /* กรอบอิสระ → พอดีรูป (ที่จุดกึ่งกลางเดิม) */
+            delete item.free;
+            const fitted = pixelBox(item);
+            Object.assign(item, fromPixels(fitted.left, fitted.top, fitted.width, fitted.height, item.zone));
         } else if (action === "lock") {
-            item.locked = true;
-            selectedId = null;
-            toast("ล็อกรูปแล้ว — ปลดล็อกได้ที่ปุ่ม 🖼 รูปภาพ");
+            item.locked = !item.locked;
+            toast(item.locked ? "ล็อกรูปแล้ว — ย้าย/ยืดไม่ได้ · คลิกรูปเพื่อแก้ไข ปลดล็อก หรือลบ" : "ปลดล็อกรูปแล้ว — ลากย้าย / ยืดได้");
         } else if (action === "delete") {
             removeImage(item.id);
             return;
         } else if (action === "duplicate") {
             const g = geometry();
-            const copy = { ...item, id: createLocalId("img"), day: item.day + 18 / g.ppd, row: item.row + 18 / unitFor(item.zone, g) };
+            const copy = { ...item, locked: false, id: createLocalId("img"), day: item.day + 18 / g.ppd, row: item.row + 18 / unitFor(item.zone, g) };
             images.push(copy);
             selectedId = copy.id;
         } else if (action === "download") {
@@ -1363,12 +1413,19 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
         const item = findImage(element.dataset.imgId);
 
-        if (!item || item.locked) return;
+        if (!item) return;
 
         event.preventDefault();
         event.stopPropagation();
 
         if (typeof closeObjectMenu === "function") closeObjectMenu();
+
+        /* รูปที่ล็อก: คลิก = เลือก (เปิดแถบแก้ไข / ปลดล็อก / ลบ) — ไม่ลากย้าย ไม่ยืด */
+        if (item.locked) {
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            if (selectedId !== item.id) select(item.id);
+            return;
+        }
 
         if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();
@@ -1450,20 +1507,36 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
         } else {
 
-            const ratio = box.width / box.height;
+            const dir = drag.dir;
 
-            const sign = drag.dir.includes("w") ? -1 : 1;
-            const signY = drag.dir.includes("n") ? -1 : 1;
+            if (dir.length === 1) {
 
-            /* ใช้แกนที่ลากมากกว่า แต่คงสัดส่วน */
-            const byX = box.width + dx * sign;
-            const byY = (box.height + dy * signY) * ratio;
+                /* ที่จับด้านข้าง: ยืด / หด ด้านเดียว → กรอบอิสระ (ไม่ต้องเท่าสัดส่วนรูป) */
+                if (dir === "e") width = Math.max(16, box.width + dx);
+                if (dir === "w") { width = Math.max(16, box.width - dx); left = box.left + box.width - width; }
+                if (dir === "s") height = Math.max(16, box.height + dy);
+                if (dir === "n") { height = Math.max(16, box.height - dy); top = box.top + box.height - height; }
 
-            width = Math.max(24, Math.abs(dx) >= Math.abs(dy) ? byX : byY);
-            height = width / ratio;
+                item.free = true;
 
-            if (drag.dir.includes("w")) left = box.left + box.width - width;
-            if (drag.dir.includes("n")) top = box.top + box.height - height;
+            } else {
+
+                /* มุม: คงสัดส่วน (กรอบพอดีรูป = สัดส่วนรูป · กรอบอิสระ = สัดส่วนกรอบ) */
+                const ratio = item.free ? box.width / box.height : (Number(item.ar) || box.width / box.height);
+
+                const sign = dir.includes("w") ? -1 : 1;
+                const signY = dir.includes("n") ? -1 : 1;
+
+                /* ใช้แกนที่ลากมากกว่า แต่คงสัดส่วน */
+                const byX = box.width + dx * sign;
+                const byY = (box.height + dy * signY) * ratio;
+
+                width = Math.max(24, Math.abs(dx) >= Math.abs(dy) ? byX : byY);
+                height = width / ratio;
+
+                if (dir.includes("w")) left = box.left + box.width - width;
+                if (dir.includes("n")) top = box.top + box.height - height;
+            }
         }
 
         Object.assign(item, fromPixels(left, top, width, height, item.zone));
@@ -1562,6 +1635,12 @@ body.zg-exporting .zg-img-toast { display: none !important; }
 
             event.preventDefault();
             event.stopImmediatePropagation();
+
+            /* รูปที่ล็อก → ไม่เลื่อน */
+            if (item.locked) {
+                toast("รูปนี้ล็อกอยู่ — กด 🔓 ปลดล็อก ก่อนเลื่อน");
+                return;
+            }
 
             const step = event.shiftKey ? 10 : 1;
             const g = geometry();

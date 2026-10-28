@@ -249,6 +249,27 @@ body.zg-dark .zg-op-section .zg-op-val { color: #9fd3ad; }
 
     }).observe(document.body, { childList: true });
 
+    /* มีโมดูลทาสีกล่องทึบทับภายหลัง (เช่น ตอนเปิดแผน/วางเทมเพลต วาดใหม่แบบหน่วงเวลา)
+       → เห็นพื้นทึบในกล่องที่ตั้งความโปร่งใสไว้ = ใช้สีใหม่นั้นเป็นฐาน แล้วทาความโปร่งใสกลับ */
+    const layer = document.getElementById("objectLayer");
+
+    if (layer) {
+        new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                const element = mutation.target;
+                if (!element.classList || !element.classList.contains("canvas-object--task")) return;
+                const object = findObject(element.dataset.objectId);
+                if (!object || !(Number(object.opacity) < 1)) return;
+                const inline = element.style.backgroundColor || "";
+                if (!inline || /^rgba/.test(inline)) return;
+                const rgb = parseRgb(inline);
+                if (!rgb) return;
+                element.dataset.zgOpBase = rgb.join(",");
+                paint(element, object);
+            });
+        }).observe(layer, { attributes: true, attributeFilter: ["style"], subtree: true });
+    }
+
     applyAll();
 
     window.ZGTaskOpacity = { apply: applyAll };

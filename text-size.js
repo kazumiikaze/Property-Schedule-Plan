@@ -7,6 +7,7 @@
    - ใช้ได้กับ: ข้อความในกล่องงาน, ป้ายเส้นวันที่, เส้นช่วงเวลา, กล่องข้อความ,
      ชื่อหมวด, ชื่อแถว / บทบาท, หัวข้อ + เนื้อหาบันทึก, หัวข้อแผน / บรรทัดรอง
    - ปุ่ม A→ = หมุนข้อความ: แนวนอน → แนวตั้ง (อ่านบนลงล่าง) → แนวตั้ง (อ่านล่างขึ้นบน)
+   - ปุ่ม ชิดซ้าย / กลาง / ชิดขวา = จัดบรรทัดข้อความ ณ ตำแหน่งเดิม (ไม่ผูกกับตำแหน่ง 9 จุด)
    - ปุ่ม B = ตัวหนา (Ctrl+B) · ปุ่ม • = ใส่/เอาจุดหน้าประโยค (Ctrl+Shift+8)
      · บรรทัดที่มีจุด กด Enter → บรรทัดใหม่มีจุดให้เอง (กด Enter ซ้ำบนบรรทัดว่าง = เลิกใส่จุด)
    - บันทึกไปกับแผน (Export / Import / เทมเพลต / ↶ ย้อนกลับ ได้)
@@ -36,6 +37,15 @@
     let rotates = {};
     const ROTATIONS = [0, 90, 270];
     const ROTATE_ICON = { 0: "A→", 90: "A↓", 270: "A↑" };
+
+    /* จัดบรรทัด (นอกจาก object) — key → "l" | "c" | "r" */
+    let aligns = {};
+    const ALIGNS = ["l", "c", "r"];
+    const ALIGN_CSS = { l: "left", c: "center", r: "right" };
+    const alignIcon = kind => {
+        const rows = [[2, 14], kind === "l" ? [2, 10] : kind === "r" ? [6, 14] : [4, 12], [2, 14], kind === "l" ? [2, 10] : kind === "r" ? [6, 14] : [4, 12]];
+        return `<svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true">${rows.map(([a, b], i) => `<rect x="${a}" y="${1 + i * 3.4}" width="${b - a}" height="1.6" rx=".8" fill="currentColor"/>`).join("")}</svg>`;
+    };
 
     const BULLET = "• ";
 
@@ -67,6 +77,18 @@
 }
 .canvas-object--task .canvas-object-label.zg-rot-90,
 .canvas-object--task .canvas-object-label.zg-rot-270 { max-height: 100%; max-width: none; }
+.zg-ts-bar button[data-ts^="align-"] { min-width: 26px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; }
+html body .zg-ta-l { text-align: left !important; }
+html body .zg-ta-c { text-align: center !important; }
+html body .zg-ta-r { text-align: right !important; }
+/* ชื่อหมวด / ชื่อแถว / บทบาท: จัดแค่บรรทัดในตัวข้อความ — ก้อนข้อความยังอยู่ตำแหน่งเดิมของช่อง
+   (หดก้อนให้พอดีข้อความ แล้ววางซ้าย / กลาง / ขวา ตามตำแหน่งเดิม data-ta-base) */
+html body .category-name.zg-ta-own,
+html body .party-main.zg-ta-own,
+html body .party-role.zg-ta-own { width: fit-content !important; max-width: 100%; }
+html body .zg-ta-own[data-ta-base="c"] { margin-left: auto !important; margin-right: auto !important; }
+html body .zg-ta-own[data-ta-base="l"] { margin-left: 0 !important; margin-right: auto !important; }
+html body .zg-ta-own[data-ta-base="r"] { margin-left: auto !important; margin-right: 0 !important; }
 .zg-ts-bar .zg-ts-sep { width: 1px; height: 16px; background: rgba(255,255,255,.2); margin: 0 2px; }
 body.zg-exporting .zg-ts-bar { display: none !important; }
 .canvas-object--task .canvas-object-label[style*="font-size"] { line-height: 1.2; }
@@ -199,10 +221,56 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
         element.classList.toggle("zg-rot-270", value === 270);
     }
 
+    function alignOf(target) {
+        const value = target.kind === "object" ? target.object.textAlign : aligns[target.key];
+        return ALIGNS.includes(value) ? value : "";
+    }
+
+    /* ช่องที่จัดบรรทัดแยกจากตำแหน่งกล่อง (ก้อนข้อความอยู่ที่เดิม) */
+    const OWN_ALIGN = ".category-name, .party-main, .party-role";
+
+    /* ตำแหน่งเดิมของก้อนข้อความในช่อง (ก่อนตั้งจัดบรรทัด) */
+    function baseAlign(element) {
+        const category = element.classList.contains("category-name") ? element.closest(".category") : null;
+        if (category) {
+            /* cat-text.js วางชื่อหมวดด้วย justify-content ของช่อง */
+            const justify = category.style.getPropertyValue("justify-content");
+            return /start|left/.test(justify) ? "l" : /end|right/.test(justify) ? "r" : "c";
+        }
+        const had = ALIGNS.filter(kind => element.classList.contains(`zg-ta-${kind}`));
+        had.forEach(kind => element.classList.remove(`zg-ta-${kind}`));
+        const css = getComputedStyle(element).textAlign;
+        had.forEach(kind => element.classList.add(`zg-ta-${kind}`));
+        return css === "center" ? "c" : css === "right" || css === "end" ? "r" : "l";
+    }
+
+    function setAlign(element, value) {
+        ALIGNS.forEach(kind => element.classList.toggle(`zg-ta-${kind}`, kind === value));
+        if (!element.matches(OWN_ALIGN)) return;
+        if (!value) {
+            element.classList.remove("zg-ta-own");
+            delete element.dataset.taBase;
+            return;
+        }
+        const base = baseAlign(element);
+        element.classList.add("zg-ta-own");
+        if (element.dataset.taBase !== base) element.dataset.taBase = base;
+    }
+
+    /* ตอนนี้ช่องจัดบรรทัดแบบไหน (ตั้งเอง หรือตามตำแหน่ง/ค่าเริ่มต้น) */
+    function shownAlign(target) {
+        const stored = alignOf(target);
+        if (stored) return stored;
+        const css = getComputedStyle(target.element).textAlign;
+        return css === "center" ? "c" : css === "right" || css === "end" ? "r" : "l";
+    }
+
     function applyRotations() {
         document.querySelectorAll(ALL_FIELDS).forEach(element => {
             const target = targetOf(element);
-            if (target) setRotation(element, rotationOf(target));
+            if (!target) return;
+            setRotation(element, rotationOf(target));
+            setAlign(element, alignOf(target));
         });
     }
 
@@ -275,6 +343,7 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
             data.fontSizes = { ...sizes };
             data.fontBolds = { ...bolds };
             data.textRotates = { ...rotates };
+            data.textAligns = { ...aligns };
         }
         return data;
     };
@@ -284,6 +353,7 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
         sizes = data && data.fontSizes && typeof data.fontSizes === "object" ? { ...data.fontSizes } : {};
         bolds = data && data.fontBolds && typeof data.fontBolds === "object" ? { ...data.fontBolds } : {};
         rotates = data && data.textRotates && typeof data.textRotates === "object" ? { ...data.textRotates } : {};
+        aligns = data && data.textAligns && typeof data.textAligns === "object" ? { ...data.textAligns } : {};
         const result = originalApply.apply(this, arguments);
         scheduleApply();
         return result;
@@ -319,7 +389,11 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
             <span class="zg-ts-sep"></span>
             <button type="button" data-ts="bold" title="ตัวหนา (Ctrl+B)">B</button>
             <button type="button" data-ts="bullet" title="ใส่/เอาจุดหน้าประโยค (Ctrl+Shift+8)">•</button>
-            <button type="button" data-ts="rotate" title="หมุนข้อความ (แนวนอน / แนวตั้ง)">A→</button>`;
+            <button type="button" data-ts="rotate" title="หมุนข้อความ (แนวนอน / แนวตั้ง)">A→</button>
+            <span class="zg-ts-sep"></span>
+            <button type="button" data-ts="align-l" title="ชิดซ้าย (ชิดหน้า)">${alignIcon("l")}</button>
+            <button type="button" data-ts="align-c" title="กึ่งกลาง">${alignIcon("c")}</button>
+            <button type="button" data-ts="align-r" title="ชิดขวา (ชิดหลัง)">${alignIcon("r")}</button>`;
 
         /* กดแล้วไม่ให้ช่องพิมพ์หลุดโฟกัส / ไม่ให้ระบบเลือก object ล้างการเลือก */
         bar.addEventListener("mousedown", event => { event.preventDefault(); event.stopPropagation(); });
@@ -333,6 +407,7 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
             else if (action === "bold") toggleBold();
             else if (action === "rotate") cycleRotation();
             else if (action === "bullet") toggleBullets();
+            else if (action.startsWith("align-")) setAlignment(action.slice(6));
             else change(action === "up" ? 1 : -1);
         });
 
@@ -381,6 +456,8 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
         const rotateBtn = bar.querySelector('[data-ts="rotate"]');
         rotateBtn.textContent = ROTATE_ICON[rotation];
         rotateBtn.classList.toggle("is-on", rotation !== 0);
+        const shown = shownAlign(active);
+        ALIGNS.forEach(kind => bar.querySelector(`[data-ts="align-${kind}"]`).classList.toggle("is-on", kind === shown));
         const lines = lineInfo(active.element);
         bar.querySelector('[data-ts="bullet"]').classList.toggle("is-on", Boolean(lines) && lines.picked.every(index => lines.lines[index].startsWith(BULLET)));
     }
@@ -465,6 +542,37 @@ body.zg-exporting .zg-ts-bar { display: none !important; }
         }
 
         applyAll();
+        /* label-drag.js: ความกว้าง (แนวนอน) / ความยาว (แนวตั้ง) ของช่องข้อความ → ใช้ค่าของแนวใหม่ทันที */
+        if (window.ZGLabelDrag && typeof window.ZGLabelDrag.apply === "function") window.ZGLabelDrag.apply();
+        paintBar();
+        positionBar();
+        record();
+    }
+
+
+    /* =====================================================
+       จัดบรรทัด: ชิดซ้าย / กลาง / ชิดขวา
+       กดปุ่มที่เลือกอยู่ซ้ำ = กลับไปจัดตามค่าเดิม (ตามตำแหน่ง)
+    ===================================================== */
+
+    function setAlignment(kind) {
+
+        if (!active || !ALIGNS.includes(kind)) return;
+
+        const next = alignOf(active) === kind ? "" : kind;
+
+        if (active.kind === "object") {
+            if (next) active.object.textAlign = next;
+            else delete active.object.textAlign;
+        } else if (next) {
+            aligns[active.key] = next;
+        } else {
+            delete aligns[active.key];
+        }
+
+        applyAll();
+        /* ชื่อหมวดที่ตั้งตำแหน่งไว้ (cat-text.js) ใส่ text-align ไว้ตรง ๆ → ให้มันจัดใหม่ตามค่านี้ */
+        if (window.ZGCatText && typeof window.ZGCatText.apply === "function") window.ZGCatText.apply();
         paintBar();
         positionBar();
         record();

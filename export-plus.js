@@ -333,7 +333,8 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
                     Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000 * pxPerDay
             );
             if (x >= timelineWidthPx - 1) break;
-            list.push(x);
+            /* day-fold.js: ขอบเดือนบนจอ */
+            list.push(window.ZGFold ? window.ZGFold.x(x) : x);
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
@@ -341,6 +342,12 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
     }
 
     function rangeLabel(fromX, toX) {
+
+        /* day-fold.js: px บนจอ → ตำแหน่งจริง */
+        if (window.ZGFold) {
+            fromX = window.ZGFold.inv(fromX);
+            toX = window.ZGFold.inv(toX);
+        }
 
         const first = Math.round(fromX / pxPerDay);
         const a = dayAt(first);
@@ -368,10 +375,15 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         return Math.max(50, Math.floor(right - rect.left));
     }
 
-    /* แบ่งช่วงตามเดือน: แต่ละหน้า = เดือนเต็ม ๆ ที่ใส่ในความกว้างจอได้ */
+    /* ขอบขวาของงาน = 5 วันหลัง object สุดท้าย (ดู export-image.js) */
+    function exportEndX() {
+        return typeof exporter.fullEndX === "function" ? exporter.fullEndX() : timelineWidthPx;
+    }
+
+    /* แบ่งช่วงตามเดือน: แต่ละหน้า = เดือนเต็ม ๆ ที่ใส่ในความกว้างจอได้ (จบที่ 5 วันหลัง object สุดท้าย) */
     function planSegments() {
 
-        const total = timelineWidthPx;
+        const total = exportEndX();
         const visible = visibleTimelineWidth();
         const bounds = monthBoundaries();
         const segments = [];
@@ -399,7 +411,16 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         return segments;
     }
 
+    /* หน้าเดียว = ทั้งตาราง (ไม่สนขอบจอ) ตั้งแต่วันเริ่ม → 5 วันหลัง object สุดท้าย */
     async function captureSingle(kind) {
+
+        if (hasTimeline() && typeof exporter.captureFull === "function") {
+
+            const canvas = await exporter.captureFull(kind, { pixelRatio: 2 });
+            const range = canvas.zgRange || { fromX: 0, toX: exportEndX() };
+
+            return [{ canvas, label: rangeLabel(range.fromX, range.toX) }];
+        }
 
         const canvas = await exporter.capture(kind, { pixelRatio: 2 });
 
@@ -407,7 +428,7 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
 
         if (hasTimeline()) {
             const from = timelineViewport.scrollLeft;
-            label = rangeLabel(from, Math.min(timelineWidthPx, from + visibleTimelineWidth()));
+            label = rangeLabel(from, Math.min(window.ZGFold ? window.ZGFold.x(timelineWidthPx) : timelineWidthPx, from + visibleTimelineWidth()));
         }
 
         return [{ canvas, label }];
@@ -421,6 +442,21 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
 
         if (segments.length <= 1) return captureSingle(kind);
 
+        /* ถ่ายทีละช่วงเดือนแบบเต็มตาราง (ทุกหมวด ไม่สนขอบจอ) */
+        if (typeof exporter.captureFull === "function") {
+
+            const pages = [];
+
+            for (let i = 0; i < segments.length; i += 1) {
+                const segment = segments[i];
+                if (onProgress) onProgress(i + 1, segments.length);
+                const canvas = await exporter.captureFull(kind, { pixelRatio: 2, fromX: segment.start, toX: segment.end });
+                pages.push({ canvas, label: rangeLabel(segment.start, segment.end) });
+            }
+
+            return pages;
+        }
+
         const content = typeof timelineContent !== "undefined" ? timelineContent : null;
         const bracket = typeof bracketContent !== "undefined" ? bracketContent : null;
         const bracketView = typeof bracketViewport !== "undefined" ? bracketViewport : null;
@@ -432,7 +468,7 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
         };
 
         /* ขยายพื้นที่เลื่อนชั่วคราว ให้หน้าสุดท้ายเลื่อนไปเริ่มที่เดือนแรกของหน้าได้ */
-        const extended = `${timelineWidthPx + visibleTimelineWidth() + 40}px`;
+        const extended = `${(window.ZGFold ? window.ZGFold.x(timelineWidthPx) : timelineWidthPx) + visibleTimelineWidth() + 40}px`;
 
         [content, bracket].forEach(element => {
             if (element) {
@@ -471,7 +507,7 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
 
                 const right = Math.max(...parts.map(rect => rect.right));
 
-                if (segment.end < timelineWidthPx && coverLeft < right - 1) {
+                if (segment.end < (window.ZGFold ? window.ZGFold.x(timelineWidthPx) : timelineWidthPx) && coverLeft < right - 1) {
 
                     cover = document.createElement("div");
                     cover.className = "zg-xp-cover";
@@ -845,8 +881,8 @@ body.zg-dark .zg-xp-seg button.on, body.zg-dark .zg-xp-btn.primary { background:
             $("company").checked = Boolean(options.footer);
 
             $("pagehint").textContent = options.pages === "months"
-                ? "ทั้งช่วงแผน หน้าละหลายเดือนเต็ม ๆ ตามที่เห็นบนจอ — อยากให้หน้าละหลายเดือนขึ้นให้ซูมออกก่อน"
-                : "ตามที่เห็นบนจอตอนนี้";
+                ? "ทั้งแผน หน้าละหลายเดือนเต็ม ๆ (เท่าความกว้างจอ) ทุกหมวด — จบที่ 5 วันหลังงานสุดท้าย · อยากให้หน้าละหลายเดือนขึ้นให้ซูมออกก่อน"
+                : "ทั้งตารางในภาพเดียว (ไม่สนขอบจอ) ทุกหมวด — ตั้งแต่วันเริ่มตาราง ถึง 5 วันหลังงานสุดท้าย";
         }
 
         function setBusy(on, text) {

@@ -39,8 +39,9 @@
         return button || null;
     }
 
+    /* v2: เอาปุ่ม Export ออกแล้ว — exportPlan() ยังใช้ภายใน (บันทึกไม่สำเร็จ → ดาวน์โหลดสำรอง) */
     const exportBtn =
-        findToolbarButton("exportPlanBtn", "Export");
+        document.getElementById("exportPlanBtn");
 
     const importBtn =
         findToolbarButton("importPlanBtn", "Import");
@@ -49,10 +50,10 @@
         ★ ไม่ return ออกไปถ้าหาปุ่มไม่เจอ
         เพราะ plans.js ต้องใช้ window.ZGPlanIO ด้านล่างเสมอ
     */
-    if (!exportBtn || !importBtn) {
+    if (!importBtn) {
 
         console.warn(
-            "[io.js] ไม่พบปุ่ม #exportPlanBtn / #importPlanBtn — ปุ่ม Export/Import จะยังไม่ทำงาน"
+            "[io.js] ไม่พบปุ่ม #importPlanBtn — ปุ่ม Import จะยังไม่ทำงาน"
         );
     }
 

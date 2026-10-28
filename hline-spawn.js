@@ -71,9 +71,11 @@
             );
         }
 
+        const screenX = screenLeft - contentRect.left - correction;
+
         return {
-            /* x ภายใน bracketContent (ก่อนบวก correction แบบที่ app.js ทำ) */
-            x: screenLeft - contentRect.left - correction,
+            /* x ภายใน bracketContent (ก่อนบวก correction แบบที่ app.js ทำ) · day-fold.js: จอ → ค่าจริง */
+            x: window.ZGFold ? window.ZGFold.inv(screenX) : screenX,
             y: labelRect.bottom - contentRect.top + GAP_BELOW_LABEL
         };
     }

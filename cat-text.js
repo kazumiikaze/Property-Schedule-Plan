@@ -117,7 +117,9 @@ body.zg-dark .zg-cat-text .zg-ct-size button.is-on { background: #1f3a2a; color:
             element.classList.toggle("zg-ct-left", col === 0);
             element.style.setProperty("justify-content", JUSTIFY[col], "important");
             element.style.setProperty("align-items", JUSTIFY[row], "important");
-            if (name) name.style.setProperty("text-align", ALIGN[col], "important");
+            /* ตั้งชิดซ้าย/กลาง/ขวาเองจากแถบตัวอักษร (text-size.js) → ใช้ค่านั้นแทน */
+            if (name && /zg-ta-[lcr]/.test(name.className)) name.style.removeProperty("text-align");
+            else if (name) name.style.setProperty("text-align", ALIGN[col], "important");
         });
     }
 

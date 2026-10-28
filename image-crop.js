@@ -120,7 +120,7 @@ body.zg-exporting .zg-crop-overlay { display: none !important; }
         const element = event.target instanceof Element ? event.target.closest(".zg-img-layer .zg-bimg") : null;
         if (!element) return;
         const item = board.list().find(entry => entry.id === element.dataset.imgId);
-        if (!item || item.locked) return;
+        if (!item) return;   /* รูปที่ล็อกก็ครอบตัดได้ (ล็อก = กันย้าย/ยืดเท่านั้น) */
         event.preventDefault();
         event.stopPropagation();
         openCrop(item.id);

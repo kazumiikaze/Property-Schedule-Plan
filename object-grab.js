@@ -267,7 +267,10 @@ body.zg-exporting .zg-drag-tip { display: none !important; }
 
         if (object.type === "dateline" || object.type === "vline") {
 
-            const date = object.linkedHeaderDate || timelineStartDate;
+            const raw = object.linkedHeaderDate || timelineStartDate;
+
+            /* วันของช่องที่เส้นอยู่จริง (เส้นวางระหว่างวันได้) */
+            const date = typeof displayDateOf === "function" ? displayDateOf(raw) : raw;
 
             return `📅 <b>${fmt(date)}</b>`;
         }

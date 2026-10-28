@@ -584,6 +584,9 @@ body.zg-text-dragging * { user-select: none !important; }
 
             showDetail: data.showDetail === true,
 
+            /* v5: ผู้ใช้ยืด/หดกล่องเองแล้ว → ใช้ขนาดที่ตั้ง (ไม่หดเท่าข้อความ แม้พื้นใส) */
+            sized: data.sized === true,
+
             detail: typeof data.detail === "string" ? data.detail : "",
 
             verticalLineStyle:
@@ -613,6 +616,15 @@ body.zg-text-dragging * { user-select: none !important; }
 
             box.content.textContent =
                 String(data.text);
+        }
+
+        /* แต่งบางส่วนไว้ (label-rich.js) → ใส่กลับ ถ้าตัวอักษรยังตรงกับ text */
+        const rich = window.ZGLabelRich;
+        if (data.rich && rich && typeof rich.sanitize === "function") {
+            const squash = value => String(value || "").replace(/\s+/g, "");
+            if (squash(rich.plainOf(data.rich)) === squash(data.text)) {
+                box.content.innerHTML = rich.sanitize(data.rich);
+            }
         }
 
         refreshEmptyState(box);
@@ -795,7 +807,7 @@ body.zg-text-dragging * { user-select: none !important; }
 
         const el = box.el;
 
-        const fit = box.bg === "transparent";
+        const fit = box.bg === "transparent" && !box.sized;
 
         el.classList.toggle("zg-text-fit", fit);
 
@@ -898,6 +910,10 @@ body.zg-text-dragging * { user-select: none !important; }
 
             text: box.content.innerText.replace(/\n$/, ""),
 
+            rich: window.ZGLabelRich && typeof window.ZGLabelRich.richOf === "function"
+                ? window.ZGLabelRich.richOf(box.content) || undefined
+                : undefined,
+
             x: box.attach ? box.screenLeft : box.x,
             y: box.attach ? box.screenTop : box.y,
 
@@ -915,6 +931,7 @@ body.zg-text-dragging * { user-select: none !important; }
             pinLeft: box.pinLeft,
             pinRight: box.pinRight,
             showDetail: box.showDetail,
+            sized: box.sized === true,
             detail: box.detail,
             verticalLineStyle: box.verticalLineStyle,
 
@@ -995,6 +1012,47 @@ body.zg-text-dragging * { user-select: none !important; }
     }
 
 
+    /*
+        v6: ปุ่มลัดของกล่องข้อความที่เลือกอยู่ (ไม่ได้กำลังพิมพ์)
+        Delete / Backspace = ลบ · Ctrl+D = ทำสำเนา · Esc = เลิกเลือก
+        (เดิมกด Delete แล้วไม่เกิดอะไร — ลบได้เฉพาะปุ่ม 🗑)
+    */
+    document.addEventListener("keydown", event => {
+
+        if (!selectedBox || !selectedBox.el.isConnected) return;
+
+        const target = event.target;
+
+        if (target instanceof Element && target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']")) return;
+
+        const ctrl = event.ctrlKey || event.metaKey;
+        const record = () => {
+            if (window.ZGHistory && typeof window.ZGHistory.record === "function") setTimeout(() => window.ZGHistory.record(), 0);
+        };
+
+        if (!ctrl && !event.altKey && (event.key === "Delete" || event.key === "Backspace")) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            removeTextBox(selectedBox);
+            record();
+            return;
+        }
+
+        if (ctrl && !event.shiftKey && (event.key || "").toLowerCase() === "d") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            duplicateTextBox(selectedBox);
+            record();
+            return;
+        }
+
+        if (event.key === "Escape") {
+            selectBox(null);
+        }
+
+    }, true);
+
+
     document.addEventListener("mousedown", event => {
 
         if (
@@ -1030,11 +1088,17 @@ body.zg-text-dragging * { user-select: none !important; }
             const offset = fitOffset(box);
             const start = getPos(box);
 
-            box.w = Math.max(MIN_W, box.el.offsetWidth + (OLD_PAD_X - FIT_PAD_X) * 2);
+            box.w = Math.max(MIN_W, Math.ceil(box.el.getBoundingClientRect().width) + 1 + (OLD_PAD_X - FIT_PAD_X) * 2); /* +1 กันตัดบรรทัดจากการปัดเศษ */
             box.minH = Math.max(MIN_H, box.el.offsetHeight + (OLD_PAD_Y - FIT_PAD_Y) * 2);
 
             setPos(box, start.left + offset.dx - (OLD_PAD_X - FIT_PAD_X), start.top + offset.dy - (OLD_PAD_Y - FIT_PAD_Y));
-            box.el.style.maxWidth = `${box.w}px`;
+
+            /*
+                v5: เดิมกล่องพื้นใสยังหดเท่าข้อความระหว่างยืด → ลากมุมไหนก็ไม่ขยาย (กล่องแค่เลื่อนที่)
+                ตอนนี้: เริ่มยืด = เลิกหดเท่าข้อความ ใช้ขนาดที่ผู้ใช้ลากจริง
+            */
+            box.sized = true;
+            applyBoxStyle(box);
         }
 
         const pos =
@@ -2009,6 +2073,115 @@ body.zg-text-dragging * { user-select: none !important; }
        PUBLIC API (ใช้โดย io.js / zoom-sync.js)
     ===================================================== */
 
+    /*
+        ยืดตำแหน่งกล่อง Text ที่ติดแม่เหล็กกับ task / hline ตอนช่องวันกว้าง-แคบเปลี่ยน
+        เดิม: คูณ dx (ขอบซ้ายกล่อง → ขอบซ้าย object) ตรง ๆ แต่ตัวกล่องไม่ยืดตาม
+              → ป้ายที่จัดไว้กลาง object เบี้ยวทุกครั้งที่ช่องวันต่างจากตอนบันทึกเทมเพลต
+        ตอนนี้รักษาตำแหน่งเทียบกับ object:
+          - ป้ายอยู่ใน object ทั้งอัน → ชิดซ้าย / กลาง / ขวา เท่าเดิม
+          - ป้ายยื่นออก / กว้างกว่า object (กึ่งกลางยังอยู่บน object) → กึ่งกลางอยู่ที่สัดส่วนเดิม
+          - ป้ายอยู่ขวาของ object → ยืดระยะตามซูม (อยู่วันที่เดิม)
+          - ป้ายอยู่ซ้ายของ object → ยืดระยะจากขอบขวาของป้าย
+          - ไม่ให้เลยขอบซ้ายของตาราง (เฉพาะป้ายที่เดิมอยู่ในตารางเกินครึ่ง)
+        รอ 2 เฟรมให้หน้าจอจัดรูปแบบเสร็จก่อน (หมุนตัวหนังสือ / ขนาดอักษรของ text-size.js)
+        ไม่งั้นตอนเปิดแผนจะวัดความกว้างป้ายผิด · ซูมหลายครั้งติดกัน → รวมเป็นครั้งเดียว
+        อัตรายืดจำแยกต่อป้าย (ป้ายที่สร้างทีหลังไม่โดนอัตราที่สั่งไว้ก่อนมันเกิด)
+    */
+    const pendingRatios = new Map();
+    let pendingFrame = 0;
+
+    function scheduleScaleAttached(ratio) {
+
+        textBoxes.forEach(box => {
+            if (box.attach) pendingRatios.set(box, (pendingRatios.get(box) || 1) * ratio);
+        });
+
+        if (pendingFrame) return;
+
+        pendingFrame = requestAnimationFrame(() => {
+            pendingFrame = requestAnimationFrame(() => {
+                pendingFrame = 0;
+                const items = Array.from(pendingRatios);
+                pendingRatios.clear();
+                applyScaleAttached(items);
+            });
+        });
+    }
+
+    function applyScaleAttached(items) {
+
+        const objects =
+            typeof timelineObjects !== "undefined" && Array.isArray(timelineObjects)
+                ? timelineObjects
+                : [];
+
+        items.forEach(([box, ratio]) => {
+
+            if (
+                !textBoxes.includes(box) ||
+                Math.abs(ratio - 1) < 1e-9 ||
+                !box.attach ||
+                (
+                    box.attach.part !== "canvas-object--task" &&
+                    box.attach.part !== "canvas-object--hline"
+                )
+            ) {
+                return;
+            }
+
+            const object = objects.find(item => item.id === box.attach.objectId);
+            const boxW = box.el ? box.el.offsetWidth : 0;
+
+            if (!object || !(object.width > 0) || !(boxW > 0)) {
+                box.attach.dx *= ratio;
+                return;
+            }
+
+            const newW = object.width;
+            const oldW = newW / ratio;
+
+            /*
+                คิดจากตำแหน่งที่เห็นจริง: กล่องพื้นใสหดเท่าตัวหนังสือแล้วถูกเลื่อนเพิ่ม (fitOffset)
+                → dx ที่เห็น = attach.dx + เลื่อนเพิ่ม (คงที่) · คำนวณเสร็จค่อยหักกลับ
+            */
+            const shift = fitOffset(box).dx || 0;
+
+            /* ตำแหน่งที่ "ควรอยู่" ก่อนถูกดันกันล้นขอบซ้ายครั้งก่อน (ไม่สะสมคลาด) */
+            const intended = Number.isFinite(box.attach.dxIntended) ? box.attach.dxIntended : box.attach.dx;
+            const dx = intended + shift;
+            const center = dx + boxW / 2;
+            let next;
+
+            if (center >= 0 && center <= oldW) {
+
+                const slack = oldW - boxW;
+
+                if (slack >= 4 && dx >= 0 && dx <= slack) {
+                    next = (dx / slack) * (newW - boxW);
+                } else {
+                    next = (center / oldW) * newW - boxW / 2;
+                }
+
+            } else if (center > oldW) {
+
+                next = dx * ratio;
+
+            } else {
+
+                next = (dx + boxW) * ratio - boxW;
+            }
+
+            box.attach.dxIntended = next - shift;
+
+            if (Number.isFinite(object.x) && object.x / ratio + dx >= -boxW / 2) {
+                next = Math.max(next, -object.x);
+            }
+
+            box.attach.dx = next - shift;
+        });
+    }
+
+
     window.ZGTextBoxes = {
 
         serialize() {
@@ -2018,9 +2191,8 @@ body.zg-text-dragging * { user-select: none !important; }
 
 
         /*
-            เรียกจาก zoom-sync.js ตอนตารางซูม:
-            กล่องที่ติดกับ task / hline (object ที่ยืดหดตามซูม)
-            ต้องยืดระยะแนวนอนจากขอบซ้ายของ object ตามด้วย
+            เรียกจาก zoom-sync.js / io.js ตอนช่องวันกว้าง-แคบเปลี่ยน (object ยืดไปแล้ว)
+            v2: คำนวณหลังหน้าจอจัดรูปแบบเสร็จ (ดู scheduleScaleAttached ด้านบน)
         */
         scaleAttachedX(ratio) {
 
@@ -2028,19 +2200,7 @@ body.zg-text-dragging * { user-select: none !important; }
                 return;
             }
 
-            textBoxes.forEach(box => {
-
-                if (
-                    box.attach &&
-                    (
-                        box.attach.part === "canvas-object--task" ||
-                        box.attach.part === "canvas-object--hline"
-                    )
-                ) {
-
-                    box.attach.dx *= ratio;
-                }
-            });
+            scheduleScaleAttached(ratio);
         },
 
 

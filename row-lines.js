@@ -43,9 +43,14 @@ body.zg-dark { --zg-row-line-color: #3b4542; }
 
         if (line && line.classList.contains("dynamic-h-line") && categoryHeight > 0) {
 
-            const ratio = Number(top) / categoryHeight;
+            /* หมวดสูงไม่เท่ากัน (หมวด Payment เตี้ยครึ่งหนึ่ง) → เทียบกับขอบหมวดจริง */
+            const value = Number(top);
+            const slots = typeof categorySlotMap === "object" && categorySlotMap ? Object.values(categorySlotMap) : [];
+            const isEdge = slots.length
+                ? slots.some(slot => Math.abs(slot.top - value) < 0.5 || Math.abs(slot.top + slot.height - value) < 0.5)
+                : Math.abs(value / categoryHeight - Math.round(value / categoryHeight)) <= 0.001;
 
-            if (Math.abs(ratio - Math.round(ratio)) > 0.001) {
+            if (!isEdge) {
                 line.classList.add("zg-row-line");
             }
         }

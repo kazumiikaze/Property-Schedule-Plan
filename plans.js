@@ -526,11 +526,14 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
         const today = new Date();
 
+        /* ค่าเริ่มต้นแผนเปล่า: 1 ต.ค. → 28 ก.พ. ปีถัดไป (ปีนี้ · ถ้าเลยกุมภาฯ ของรอบนี้มาแล้ว ใช้ ต.ค. ของปีนี้ที่กำลังจะถึง) */
+        const year = today.getMonth() <= 1 ? today.getFullYear() - 1 : today.getFullYear();
+
         const start =
-            new Date(today.getFullYear(), today.getMonth(), 1);
+            new Date(year, 9, 1);
 
         const end =
-            new Date(today.getFullYear() + 1, today.getMonth(), 1);
+            new Date(year + 1, 1, 28);
 
         return {
 
@@ -538,9 +541,10 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
             version: window.ZGPlanIO.FILE_VERSION,
 
-            title: title || "Property schedule plan",
+            /* ว่าง = เห็นคำแนะนำจาง ๆ "พิมพ์หัวข้อแผน" (เดิมใส่ข้อความตัวอย่างไว้ ซึ่งชนกับคำที่ผู้ใช้พิมพ์) */
+            title: title || "",
 
-            subtitle: "title",
+            subtitle: "",
 
             updateDate: formatDateInputValue(today),
 
@@ -555,9 +559,10 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
                 scrollLeft: 0
             },
 
+            /* หมวดปกติ → หมวดเตี้ย (ครึ่งหนึ่ง · 1 แถว) → หมวดปกติ */
             categories: [
                 createDefaultCategory(),
-                createDefaultCategory(),
+                typeof createPaymentCategory === "function" ? createPaymentCategory() : createDefaultCategory(),
                 createDefaultCategory()
             ],
 

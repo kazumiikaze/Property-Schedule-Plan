@@ -181,6 +181,28 @@ body.zg-dark .new-category-dialog .ncd-actions button:not(.ncd-ok) { background:
 body.zg-dark .zg-catdlg-icon { background: #26372d; }
 body.zg-dark .zg-catdlg-preview { background: #1f2623; border-color: #3a4440; }
 body.zg-dark .zg-catdlg .ncd-swatch { border-color: #222a27; }
+
+/* ชนิดหมวด: ปกติ / Payment (ช่องเตี้ยครึ่งหนึ่ง) */
+.ncd-kind { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ncd-kind-btn {
+    display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px;
+    border: 1px solid #dfe5e1; border-radius: 10px; background: #fff; color: #26302b;
+    font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+}
+.ncd-kind-btn small { display: block; color: #8a948f; font-size: 10.5px; font-weight: 400; }
+.ncd-kind-btn:hover { border-color: #9fd0aa; }
+.ncd-kind-btn.active { border-color: #3a8a4f; background: #eef8f1; box-shadow: 0 0 0 2px rgba(58, 138, 79, .15); }
+.ncd-kind-ico { flex: none; width: 16px; border-radius: 3px; background: #cfd8d3; }
+.ncd-kind-ico--normal { height: 20px; }
+.ncd-kind-ico--payment { height: 10px; }
+.ncd--payment .zg-catdlg-preview { height: 24px; }
+.ncd--payment .zg-catdlg-preview-rows span:last-child { display: none; }
+body.zg-dark .ncd-kind-btn { background: #2b3330; border-color: #3a4440; color: #e3e9e5; }
+body.zg-dark .ncd-kind-btn.active { background: #26372d; border-color: #3a8a4f; }
+
+/* หมวด Payment บนตาราง: ช่องเตี้ย → ชื่อหมวดกะทัดรัดขึ้นนิดหน่อย */
+.category.category--payment .category-name { line-height: 1.15; }
 `;
 
     document.head.appendChild(style);

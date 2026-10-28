@@ -134,7 +134,8 @@
     function contentWidth() {
 
         if (typeof timelineWidthPx !== "undefined" && timelineWidthPx > 0) {
-            return timelineWidthPx;
+            /* day-fold.js: ความกว้างบนจอหลังซ่อน / รวบวัน */
+            return window.ZGFold ? window.ZGFold.x(timelineWidthPx) : timelineWidthPx;
         }
 
         const content = document.getElementById("timelineContent");
@@ -362,6 +363,14 @@
     function update() {
 
         frame = null;
+
+        /* กำลังถ่ายภาพ Export ทั้งตาราง (export-image.js) → ไม่ปิด/ไม่ตัด object ที่เกินวันสิ้นสุด ให้ติดไปในภาพ */
+        if (document.body.classList.contains("zg-xp-tiling")) {
+
+            hideAll();
+
+            return;
+        }
 
         /* พิกัดอ้างอิง = กล่องแม่ที่ mask ใช้วางตำแหน่งจริง (กัน .plan เป็น static) */
         const parent = masks.table.offsetParent || plan;

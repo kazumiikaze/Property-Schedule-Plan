@@ -275,35 +275,10 @@
         { icon: "📅", label: "ไปที่วันนี้", keys: "today วันนี้ ปัจจุบัน", run: () => goToDate(new Date()) },
 
         {
-            icon: "💾", label: "Export ไฟล์แผน (.json)", keys: "export save json บันทึก ไฟล์แผน ส่งออก",
-            run: () => window.ZGPlanIO && window.ZGPlanIO.exportFile && window.ZGPlanIO.exportFile()
-        },
-        {
-            icon: "🖼", label: "Export รูปภาพทั้งกระดาน (PNG)", keys: "export image png รูป ภาพ ส่งออก",
-            run: () => window.ZGExportImage && window.ZGExportImage.exportAs("image", "png")
-        },
-        {
-            icon: "📄", label: "Export รูปภาพทั้งกระดาน (PDF)", keys: "export pdf ส่งออก",
-            run: () => window.ZGExportImage && window.ZGExportImage.exportAs("image", "pdf")
-        },
-        {
-            icon: "🖼", label: "Export เฉพาะตาราง (PNG)", keys: "export table png ตาราง ส่งออก",
-            run: () => window.ZGExportImage && window.ZGExportImage.exportAs("table", "png")
-        },
-        {
-            icon: "📄", label: "Export เฉพาะตาราง (PDF)", keys: "export table pdf ตาราง ส่งออก",
-            run: () => window.ZGExportImage && window.ZGExportImage.exportAs("table", "pdf")
-        },
-        {
             icon: "📂", label: "Import ไฟล์แผน (.json)", keys: "import open json เปิด นำเข้า ไฟล์แผน",
             run: () => window.ZGPlanIO && window.ZGPlanIO.importFile && window.ZGPlanIO.importFile()
         },
         { icon: "🖼", label: "Import รูปภาพ", keys: "import image picture รูป ภาพ แปะ นำเข้า", run: () => clickButton("importPlanBtn") },
-        {
-            icon: "🖨", label: "พิมพ์ A3", keys: "print a3 พิมพ์", hotkey: "Ctrl+P",
-            run: () => window.ZGPrintA3 ? window.ZGPrintA3.print() : clickButton("printA3Btn")
-        },
-        { icon: "🖨", label: "ตั้งค่าการพิมพ์", keys: "print setting scale พิมพ์ ขนาด", run: () => clickButton("printScaleBtn") },
 
         { icon: "▾", label: "สลับแผน", keys: "plan switch แผน เลือกแผน", run: () => clickButton("planSelectBtn") },
         { icon: "＋", label: "เพิ่มแผนใหม่", keys: "new plan แผนใหม่ สร้างแผน", run: () => clickButton("planAddBtn") },
@@ -380,7 +355,7 @@
                     OBJECT_LABELS[object.type] || { icon: "◇", name: object.type };
 
                 const date =
-                    formatDate(object.linkedHeaderDate);
+                    formatDate(object.linkedHeaderDate && typeof displayDateOf === "function" ? displayDateOf(object.linkedHeaderDate) : object.linkedHeaderDate);
 
                 const text = [
                     object.text,
@@ -478,8 +453,11 @@
             return;
         }
 
+        /* day-fold.js: ตำแหน่งจริง → ตำแหน่งบนจอ */
+        const screenLeft = window.ZGFold ? window.ZGFold.x(leftPx) : leftPx;
+
         const target =
-            Math.max(0, leftPx - timelineViewport.clientWidth / 3);
+            Math.max(0, screenLeft - timelineViewport.clientWidth / 3);
 
         timelineViewport.scrollLeft = target;
 

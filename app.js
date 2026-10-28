@@ -552,11 +552,78 @@ function createDefaultCategory(
 }
 
 
+/* =========================================================
+   หมวด Payment: ช่องเตี้ยครึ่งหนึ่งของหมวดปกติ (category.heightScale = 0.5)
+   ทำได้ทุกอย่างเหมือนหมวดปกติ (ชื่อ สี แถว ลบ ย้าย วางงาน ฯลฯ)
+========================================================= */
+
+const PAYMENT_HEIGHT_SCALE = 0.5;
+
+const PAYMENT_CATEGORY_NAME = "Payment";
+
+function createPaymentCategory(
+    color = "#d9dcde"
+) {
+
+    return {
+
+        ...createDefaultCategory(color),
+
+        /* เหมือนหมวดปกติทุกอย่าง (ชื่อเริ่มต้นเดียวกัน) ต่างแค่ความสูงครึ่งหนึ่ง */
+        kind:
+            "payment",
+
+        heightScale:
+            PAYMENT_HEIGHT_SCALE,
+
+        rows: [
+
+            createDefaultRow(0)
+
+        ]
+    };
+}
+
+
+/* ความสูงของหมวด = categoryHeight × สัดส่วน (หมวดปกติ = 1) */
+function categoryScaleOf(
+    category
+) {
+
+    const scale =
+        Number(
+            category &&
+            category.heightScale
+        );
+
+    return scale > 0 && scale <= 4
+        ? scale
+        : 1;
+}
+
+
+/* ขอบบนของหมวดลำดับที่ index (หน่วย = ความสูงหมวดปกติ) */
+function categoryTopUnits(
+    index
+) {
+
+    let units = 0;
+
+    for (let i = 0; i < index && i < categories.length; i += 1) {
+
+        units += categoryScaleOf(categories[i]);
+    }
+
+    return units;
+}
+
+
+/* ค่าเริ่มต้นของตาราง: หมวดปกติ → หมวดเตี้ย (ครึ่งหนึ่ง · 1 แถว) → หมวดปกติ */
 let categories = [
 
     createDefaultCategory(),
 
-    createDefaultCategory(),
+    createPaymentCategory(),
 
     createDefaultCategory()
 
@@ -1071,14 +1138,34 @@ function calculateGeometry() {
         scheduleArea.clientHeight;
 
 
+    /*
+        เห็นพร้อมกัน VISIBLE_CATEGORY_COUNT หมวด (หมวดที่เกินเลื่อนดู)
+        หมวด Payment เตี้ยครึ่งเดียว → นับครึ่ง ให้ 3 หมวดแรกเต็มช่องพอดี
+        (แผนที่ไม่มีหมวด Payment = เท่าเดิมทุกพิกเซล)
+    */
+    let visibleUnits = 0;
+
+    for (let i = 0; i < VISIBLE_CATEGORY_COUNT; i += 1) {
+
+        visibleUnits +=
+            i < categories.length
+                ? categoryScaleOf(categories[i])
+                : 1;
+    }
+
+    /* ตารางเห็นสูงสุด 3 หมวด (เกิน → เลื่อนด้วย scrollbar) — ผู้ใช้กำหนด */
+
+
     categoryHeight =
         viewportHeight /
-        VISIBLE_CATEGORY_COUNT;
+        visibleUnits;
 
 
     totalContentHeight =
         categoryHeight *
-        categories.length;
+        categoryTopUnits(
+            categories.length
+        );
 
 
     maxVerticalScroll =
@@ -1125,6 +1212,45 @@ function calculateGeometry() {
    TIMELINE DATE GEOMETRY
 ========================================================= */
 
+/*
+    จำนวนวันที่ตารางแสดงพอดีความกว้าง (ซูม 100%)
+    - ปกติ: 6 เดือนนับจากวันเริ่ม
+    - ↔ ทั้งแผน (fit-plan.js): แผนสั้นกว่า 6 เดือน → พอดีทั้งแผน · ยาวกว่า → เห็นสูงสุด 6 เดือน (เลื่อนดูด้วย scrollbar)
+    (+1 = table-fit.js นับรวมวันสุดท้าย)
+*/
+function timelineFitDays(
+    startDate,
+    totalDays
+) {
+
+    const referenceDays =
+        Math.max(
+            1,
+            daysBetween(
+                startDate,
+                addMonths(
+                    startDate,
+                    VISIBLE_MONTHS_DEFAULT
+                )
+            )
+        );
+
+    if (
+        window.ZG_FIT_PLAN &&
+        window.ZG_FIT_PLAN.on
+    ) {
+
+        /* "6 เดือนเต็ม" รวมวันสุดท้าย → +1 */
+        return Math.min(
+            referenceDays + 1,
+            totalDays + 1
+        );
+    }
+
+    return referenceDays;
+}
+
+
 function calculateTimelineGeometry() {
 
     timelineTotalDays =
@@ -1158,9 +1284,15 @@ function calculateTimelineGeometry() {
         );
 
 
+    const fitDays =
+        timelineFitDays(
+            timelineStartDate,
+            timelineTotalDays
+        );
+
     const fitBasePxPerDay =
         viewportWidth > 0
-            ? viewportWidth / referenceDays
+            ? viewportWidth / fitDays
             : BASE_PX_PER_DAY;
 
 
@@ -1220,12 +1352,56 @@ function dateToLeft(
     date
 ) {
 
+    /*
+        v2: เส้นวันที่วางระหว่างวันได้ (เวลาในวัน = เศษของวัน)
+        วันที่เต็มวัน (เที่ยงคืน) ได้ค่าเท่าเดิมทุกพิกเซล
+    */
+    const day =
+        new Date(date);
+
+    const midnight =
+        new Date(
+            day.getFullYear(),
+            day.getMonth(),
+            day.getDate()
+        );
+
+    const fraction =
+        (day - midnight) /
+        MS_PER_DAY;
+
     return (
-        daysBetween(
-            timelineStartDate,
-            date
+        (
+            daysBetween(
+                timelineStartDate,
+                midnight
+            ) +
+            fraction
         ) *
         pxPerDay
+    );
+}
+
+
+/*
+    วันที่ "ที่เห็น" ของเส้นวันที่ / เส้นแนวตั้ง = วันของช่องที่เส้นอยู่จริงบนจอ
+    (line-center.js วาดเส้นกึ่งกลางช่อง = เลื่อนไปครึ่งวัน → วางระหว่างวัน เกินครึ่งวัน = ช่องถัดไป)
+    เส้นที่อยู่ตรงวันเต็ม (เที่ยงคืน) ได้วันเดิมเสมอ
+*/
+function displayDateOf(
+    date
+) {
+
+    const shifted =
+        new Date(
+            new Date(date).getTime() +
+            MS_PER_DAY / 2
+        );
+
+    return new Date(
+        shifted.getFullYear(),
+        shifted.getMonth(),
+        shifted.getDate()
     );
 }
 
@@ -1675,14 +1851,22 @@ function renderCategory(
     categoryIndex
 ) {
 
+    const categoryTop =
+        categoryTopUnits(categoryIndex) *
+        categoryHeight;
+
+    const thisCategoryHeight =
+        categoryScaleOf(category) *
+        categoryHeight;
+
+
     categorySlotMap[category.id] = {
 
         top:
-            categoryIndex *
-            categoryHeight,
+            categoryTop,
 
         height:
-            categoryHeight
+            thisCategoryHeight
     };
 
 
@@ -1693,7 +1877,9 @@ function renderCategory(
 
 
     categoryElement.className =
-        "category";
+        category.kind === "payment" || categoryScaleOf(category) < 1
+            ? "category category--payment"
+            : "category";
 
 
     categoryElement.dataset.categoryId =
@@ -1701,14 +1887,11 @@ function renderCategory(
 
 
     categoryElement.style.top =
-        `${
-            categoryIndex *
-            categoryHeight
-        }px`;
+        `${categoryTop}px`;
 
 
     categoryElement.style.height =
-        `${categoryHeight}px`;
+        `${thisCategoryHeight}px`;
 
 
     categoryElement.style.backgroundColor =
@@ -1840,6 +2023,7 @@ function renderPartyRows(
 
 
     const rowHeight =
+        categoryScaleOf(category) *
         categoryHeight /
         rowCount;
 
@@ -1893,7 +2077,7 @@ function renderPartyRows(
 
             const rowTop =
                 (
-                    categoryIndex *
+                    categoryTopUnits(categoryIndex) *
                     categoryHeight
                 ) +
                 (
@@ -2151,13 +2335,17 @@ function createTimelineGrid() {
                 );
 
 
+            const thisCategoryHeight =
+                categoryScaleOf(category) *
+                categoryHeight;
+
             const rowHeight =
-                categoryHeight /
+                thisCategoryHeight /
                 rowCount;
 
 
             const categoryTop =
-                categoryIndex *
+                categoryTopUnits(categoryIndex) *
                 categoryHeight;
 
 
@@ -2185,7 +2373,7 @@ function createTimelineGrid() {
 
             createGridLine(
                 categoryTop +
-                categoryHeight
+                thisCategoryHeight
             );
         }
     );
@@ -2326,7 +2514,7 @@ function highlightLinkedHeaderDate(
 
     const iso =
         formatDateInputValue(
-            object.linkedHeaderDate
+            displayDateOf(object.linkedHeaderDate)
         );
 
     const label =
@@ -2504,8 +2692,10 @@ function renderDateLineObject(
 
     dateBadge.textContent =
         formatThaiDateShort(
-            object.linkedHeaderDate ||
-            timelineStartDate
+            displayDateOf(
+                object.linkedHeaderDate ||
+                timelineStartDate
+            )
         );
 
     chip.appendChild(
@@ -2562,6 +2752,60 @@ function renderDateLineObject(
                     "[contenteditable]"
                 )
             ) {
+
+                /*
+                    v2: กดบนตัวหนังสือ — คลิกเฉย ๆ = พิมพ์แก้เหมือนเดิม
+                    กดแล้วลาก (เกิน 4px) = ย้ายเส้นวันที่ (เดิมย้ายไม่ได้ถ้าตัวหนังสือเต็มกล่อง)
+                    กำลังพิมพ์อยู่ (โฟกัสในช่อง) → ลากเพื่อเลือกตัวหนังสือได้ตามปกติ
+                */
+                if (
+                    event.button !== 0 ||
+                    document.activeElement === event.target.closest("[contenteditable]")
+                ) {
+
+                    return;
+                }
+
+                const startX = event.clientX;
+                const startY = event.clientY;
+
+                const stopWatching = () => {
+                    document.removeEventListener("mousemove", watchMove, true);
+                    document.removeEventListener("mouseup", stopWatching, true);
+                };
+
+                const watchMove = moveEvent => {
+
+                    if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 4) {
+                        return;
+                    }
+
+                    stopWatching();
+
+                    const editable = event.target.closest("[contenteditable]");
+
+                    if (editable) editable.blur();
+
+                    const selection = window.getSelection && window.getSelection();
+
+                    if (selection) selection.removeAllRanges();
+
+                    beginObjectDrag(
+                        {
+                            clientX: startX,
+                            clientY: startY,
+                            preventDefault() {},
+                            stopPropagation() {}
+                        },
+                        object,
+                        "move-dateline"
+                    );
+
+                    handleObjectDragMove(moveEvent);
+                };
+
+                document.addEventListener("mousemove", watchMove, true);
+                document.addEventListener("mouseup", stopWatching, true);
 
                 return;
             }
@@ -3001,7 +3245,7 @@ function renderCanvasObject(
 
         dateBadge.textContent =
             formatThaiDateShort(
-                object.linkedHeaderDate
+                displayDateOf(object.linkedHeaderDate)
             );
 
         labelWrap.appendChild(
@@ -3376,20 +3620,35 @@ function handleObjectDragMove(
 
     } else if (mode === "move-dateline") {
 
-        const dayOffset =
-            leftDeltaToDayOffset(
-                deltaX
-            );
-
-        const newDate =
-            new Date(
+        /*
+            v2: ลากซ้าย-ขวาได้อิสระ (วางระหว่างวันได้)
+            กด Shift ค้าง = ดูดติดทีละวันแบบเดิม
+        */
+        let position =
+            dateToLeft(
                 originDate ||
                 timelineStartDate
+            ) / pxPerDay +
+            deltaX / pxPerDay;
+
+        if (event && event.shiftKey) {
+
+            position =
+                Math.round(position);
+        }
+
+        const wholeDays =
+            Math.floor(position);
+
+        const newDate =
+            addDays(
+                timelineStartDate,
+                wholeDays
             );
 
-        newDate.setDate(
-            newDate.getDate() +
-            dayOffset
+        newDate.setTime(
+            newDate.getTime() +
+            Math.round((position - wholeDays) * MS_PER_DAY)
         );
 
         object.linkedHeaderDate =
@@ -4664,6 +4923,18 @@ function openNewCategoryDialog() {
         <div class="ncd-title">เพิ่มหมวดหมู่</div>
 
         <div>
+            <div class="ncd-label">ชนิดหมวด</div>
+            <div class="ncd-kind" id="ncdKind" role="radiogroup">
+                <button type="button" class="ncd-kind-btn active" data-kind="normal" role="radio" aria-checked="true">
+                    <span class="ncd-kind-ico ncd-kind-ico--normal"></span>หมวดปกติ
+                </button>
+                <button type="button" class="ncd-kind-btn" data-kind="payment" role="radio" aria-checked="false">
+                    <span class="ncd-kind-ico ncd-kind-ico--payment"></span>หมวดเล็ก
+                </button>
+            </div>
+        </div>
+
+        <div>
             <div class="ncd-label">ชื่อหมวดหมู่</div>
             <input type="text" id="ncdName" value="${DEFAULT_CATEGORY_NAME}" maxlength="60">
         </div>
@@ -4693,6 +4964,37 @@ function openNewCategoryDialog() {
 
     const swatchButtons =
         dialog.querySelectorAll(".ncd-swatch");
+
+
+    /* ชนิดหมวด: ปกติ / Payment (ช่องเตี้ยครึ่งหนึ่ง) */
+    let chosenKind =
+        "normal";
+
+    dialog.querySelectorAll(".ncd-kind-btn").forEach(
+        button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    const before = chosenKind;
+
+                    chosenKind =
+                        button.dataset.kind;
+
+                    dialog.querySelectorAll(".ncd-kind-btn").forEach(other => {
+                        other.classList.toggle("active", other === button);
+                        other.setAttribute("aria-checked", other === button ? "true" : "false");
+                    });
+
+                    dialog.classList.toggle("ncd--payment", chosenKind === "payment");
+
+                    void before;
+                    /* ไม่ส่ง input ไปที่ช่องชื่อ (จะเปิดรายการชื่อที่เคยใช้ขึ้นมาเอง ทั้งที่ยังไม่ได้กดช่องชื่อ) */
+                }
+            );
+        }
+    );
 
 
     function setColor(
@@ -4742,9 +5044,9 @@ function openNewCategoryDialog() {
             DEFAULT_CATEGORY_NAME;
 
         const category =
-            createDefaultCategory(
-                chosenColor
-            );
+            chosenKind === "payment"
+                ? createPaymentCategory(chosenColor)
+                : createDefaultCategory(chosenColor);
 
         category.name =
             name;

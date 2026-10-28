@@ -172,8 +172,8 @@ html.zg-screen-xl .toolbar-search input { font-size: 13px; }
 
 /* ---------- จอคอมเล็ก / หน้าต่างแคบ ---------- */
 html.zg-screen-s {
-    --category-width: 12%;
-    --party-width: 20%;
+    --category-width: 10%;
+    --party-width: 14%;
 }
 
 /* ---------- toolbar ล้นจอ (หน้าต่างแคบ / กด Ctrl+ ซูมเบราว์เซอร์) → ขึ้นบรรทัดใหม่ ---------- */

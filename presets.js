@@ -81,6 +81,14 @@
         }
     }
 
+    /* ตำแหน่ง "ระหว่างวัน" ของเส้นวันที่ที่ลากอิสระ (0–1 ของวัน) — dateline-free.js */
+    function fractionOfDay(value) {
+        const date = value instanceof Date ? value : new Date(value);
+        if (isNaN(date)) return 0;
+        const midnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        return Math.max(0, Math.min(0.999, (date - midnight) / DAY_MS));
+    }
+
     function dayNumber(date) {
         return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
     }
@@ -110,9 +118,13 @@
     function rowTops() {
         const tops = [];
         const unit = rowUnit();
-        (Array.isArray(categories) ? categories : []).forEach((category, index) => {
+        let top = 0;
+        (Array.isArray(categories) ? categories : []).forEach(category => {
             const count = Math.max(1, (category.rows || []).length);
-            for (let row = 0; row < count; row += 1) tops.push(index * unit + row * unit / count);
+            /* หมวด Payment เตี้ยครึ่งหนึ่ง (app.js categoryScaleOf) */
+            const height = unit * (typeof categoryScaleOf === "function" ? categoryScaleOf(category) : 1);
+            for (let row = 0; row < count; row += 1) tops.push(top + row * height / count);
+            top += height;
         });
         return tops.length ? tops : [0];
     }
@@ -186,6 +198,18 @@
 }
 .zg-pre-card:hover { border-color: #f2c94c; box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-1px); }
 .zg-pre-card img { display: block; width: 100%; height: 86px; object-fit: contain; background: #fff; pointer-events: none; -webkit-user-drag: none; }
+/* ชุดที่ไม่มีรูปย่อ → พื้นว่างขนาดเท่ารูป (แทนแท็กรูปที่ว่างเปล่า) */
+body.zg-pre-shot .canvas-object:not(.zg-pre-keep),
+body.zg-pre-shot .zg-img-layer .zg-bimg:not(.zg-pre-keep),
+body.zg-pre-shot .zg-text-box:not(.zg-pre-keep),
+body.zg-pre-shot .zg-dateline-stem:not(.zg-pre-keep),
+body.zg-pre-shot .zg-vline-stem:not(.zg-pre-keep) { visibility: hidden !important; }
+body.zg-pre-shot .zg-pre, body.zg-pre-shot .zg-pre-peek, body.zg-pre-shot .zg-pre-quick, body.zg-pre-shot .zg-pre-pill,
+body.zg-pre-shot .zg-pre-onboard, body.zg-pre-shot .zg-ts-bar, body.zg-pre-shot .zg-bimg-bar, body.zg-pre-shot .zg-pd-panel,
+body.zg-pre-shot .zg-lbl-handle, body.zg-pre-shot .zg-chip-handle, body.zg-pre-shot [class*="toast"] { visibility: hidden !important; }
+.zg-pre-peek-shot { display: block; max-width: 100%; max-height: 180px; margin: 0 auto 8px; border-radius: 8px; border: 1px solid #e3e8e5; background: #fff; object-fit: contain; }
+.zg-pre-card img.is-shot { object-fit: contain; background: #fff; }
+.zg-pre-nothumb { display: grid; place-items: center; width: 100%; height: 86px; background: #f6f8f7; color: #b7c2bc; font-size: 22px; pointer-events: none; }
 .zg-pre-name { padding: 5px 7px 6px; font-weight: 700; font-size: 11.5px; line-height: 1.3; border-top: 1px solid #eef1ef;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zg-pre-meta { padding: 0 7px 6px; margin-top: -3px; font-size: 10px; color: #8a948f; }
@@ -282,6 +306,9 @@ body.zg-pre-dragging, body.zg-pre-dragging * { cursor: grabbing !important; user
 }
 .zg-pre-quick button { border: 0; border-radius: 99px; padding: 3px 10px; background: #f2b705; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
 .zg-pre-quick button:hover { background: #dca503; }
+.zg-pre-quick button[data-q-group] { background: #3a8a4f; margin-right: 4px; }
+.zg-pre-quick button[data-q-group]:hover { background: #2f7541; }
+.zg-pre-quick button[hidden] { display: none; }
 .zg-pre-quick button.ghost { background: transparent; color: #7d8781; padding: 3px 7px; }
 .zg-pre-quick input { width: 190px; height: 24px; padding: 0 8px; border: 1px solid #e6dcbc; border-radius: 99px; font: inherit; font-size: 12px; }
 body.zg-dark .zg-pre-quick { background: #222a27; border-color: #8a7420; }
@@ -332,11 +359,18 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         });
     }
 
-    async function idbPut(value) {
+    const RESET_FLAG = "zg-presets-reset-2026-10";
+    const RESET_BACKUP_KEY = "backup-2026-10";
+
+    function idbPut(value) {
+        return idbPutKey(DB_KEY, value);
+    }
+
+    async function idbPutKey(key, value) {
         const db = await openDb();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(DB_STORE, "readwrite");
-            tx.objectStore(DB_STORE).put(value, DB_KEY);
+            tx.objectStore(DB_STORE).put(value, key);
             tx.oncomplete = () => resolve(true);
             tx.onerror = () => reject(tx.error || new Error("IDB_WRITE"));
             tx.onabort = () => reject(tx.error || new Error("IDB_ABORT"));
@@ -364,6 +398,20 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             legacy.forEach(item => { if (!list.some(existing => existing.id === item.id)) list.push(item); });
 
             localCache = list;
+
+            /* ล้างชุดสำเร็จทั้งหมดครั้งเดียว (ต.ค. 2026 — เริ่มสร้างชุดใหม่) · ชุดเดิมย้ายไปเก็บสำรองไว้ใน IndexedDB ไม่ทิ้ง */
+            if (!readJson(RESET_FLAG, false)) {
+                try {
+                    if (list.length || legacy.length) {
+                        await idbPutKey(RESET_BACKUP_KEY, list);
+                        await idbPut([]);
+                    }
+                    localStorage.removeItem(LOCAL_KEY);
+                    writeJson(RESET_FLAG, true);
+                    localCache = [];
+                    return localCache;
+                } catch (error) { /* ล้างไม่ได้ (เช่น ไม่มี IndexedDB) → ใช้ของเดิมต่อ ลองใหม่ครั้งหน้า */ }
+            }
 
             if (legacy.length) {
                 try {
@@ -522,6 +570,56 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         toast(L("แยกกลุ่มแล้ว — แก้ทีละชิ้นได้", "Ungrouped — edit pieces one by one", "グループを解除しました"));
     }
 
+    /*
+        จัดกลุ่มเอง: ลากคลุม object แล้วกด "🔗 จัดกลุ่ม" (หรือ Ctrl+G)
+        → คลิกชิ้นไหนก็เลือกทั้งกลุ่ม ลากย้ายไปด้วยกัน · ✂ แยกกลุ่ม / Ctrl+Shift+G
+        ใช้กลไกเดียวกับชุดสำเร็จ (zgGroup บันทึกไปกับแผน)
+    */
+    function createGroup(selection = currentSelection()) {
+
+        if (selectionCount(selection) < 2) {
+            toast(L("เลือกอย่างน้อย 2 ชิ้นก่อน (ลากคลุม)", "Select at least 2 pieces first", "2つ以上選択してください"));
+            return null;
+        }
+
+        const groupId = uid("group");
+        const name = L("กลุ่ม", "Group", "グループ");
+
+        const store = groupsStore();
+
+        /* ชิ้นที่เคยอยู่กลุ่มอื่น → ย้ายมากลุ่มใหม่ */
+        Object.keys(store).forEach(key => {
+            const entry = store[key];
+            entry.images = (entry.images || []).filter(id => !selection.images.includes(id));
+            entry.texts = (entry.texts || []).filter(id => !selection.texts.includes(id));
+        });
+
+        selection.ids.forEach(id => {
+            const object = findObject(id);
+            if (object) {
+                object.zgGroup = groupId;
+                object.zgGroupName = name;
+            }
+        });
+
+        store[groupId] = { name, kind: "manual", images: selection.images.slice(), texts: selection.texts.slice(), at: Date.now() };
+        saveGroups(store);
+
+        selectGroup(groupId);
+        record();
+
+        toast(L(`จัดกลุ่มแล้ว (${selectionCount(selection)} ชิ้น) — คลิกชิ้นไหนก็เลือกทั้งกลุ่ม · ✂ แยกกลุ่ม หรือ Ctrl+Shift+G`,
+            `Grouped ${selectionCount(selection)} pieces — click any piece to select the group · Ctrl+Shift+G to ungroup`,
+            `${selectionCount(selection)} 個をグループ化しました`));
+
+        return groupId;
+    }
+
+    function isManualGroup(groupId) {
+        const entry = groupsStore()[groupId];
+        return Boolean(entry && entry.kind === "manual");
+    }
+
 
     /* =====================================================
        1) บันทึกที่เลือกเป็นชุด
@@ -546,6 +644,17 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
     function textStyleOf(id) {
         const api = window.ZGTextSize;
         return api && typeof api.getStyle === "function" && id ? api.getStyle(`text:${id}`) : null;
+    }
+
+    /* ความกว้างพื้นที่ข้อความในกล่องงาน (px จริงบนตาราง ไม่รวมรูปไอคอน) */
+    function labelRoomOf(id) {
+        const element = document.querySelector(`#objectLayer .canvas-object--task[data-object-id="${CSS.escape(id)}"]`);
+        const wrap = element && element.querySelector(".canvas-object-label-wrap");
+        if (!wrap || !wrap.clientWidth) return 0;
+        /* ใช้ความกว้างละเอียดระดับเศษพิกเซล (clientWidth ปัดเป็นจำนวนเต็ม → ตัดบรรทัดคลาดได้) */
+        const cs = getComputedStyle(wrap);
+        const inset = parseFloat(cs.getPropertyValue("--zg-li")) || 0;
+        return Math.max(0, (parseFloat(cs.width) || wrap.clientWidth) - inset);
     }
 
     function buildPreset(name, selection) {
@@ -601,7 +710,9 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             name,
             createdAt: new Date().toISOString(),
             version: 1,
-            anchor: { rowUnit: unit },
+            /* จำแค่การจัดวาง (ไม่จำวันที่): แถวที่ชุดเริ่ม → วางแล้วอยู่หมวด / แถวเดิม */
+            anchor: { rowUnit: unit, rowIndex: Math.max(0, rowTops().findIndex(t => Math.abs(t - anchorTop) < 0.5)) },
+            _anchorDay: anchorDay,
 
             objects: objects.map(source => {
                 const object = clone(source);
@@ -611,9 +722,16 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                 if (object.type === "dateline" || object.type === "vline") {
                     const date = toDate(source.linkedHeaderDate);
                     item.dateOff = date ? dayNumber(date) - sDay - anchorDay : 0;
+                    const frac = fractionOfDay(source.linkedHeaderDate);
+                    if (frac > 0.0001) item.dateFrac = Number(frac.toFixed(5));
                 } else {
                     item.dayOff = object.x / perDay - anchorDay;
                     item.wDays = object.width / perDay;
+                    /* ความกว้างพื้นที่ข้อความตอนบันทึก → วางในแผนที่ px ต่อวันต่างไปนิด ข้อความยังตัดบรรทัดเหมือนเดิม */
+                    if (object.type === "task") {
+                        const room = labelRoomOf(source.id);
+                        if (room > 0) item.labelRoom = Number(room.toFixed(3));
+                    }
                     if (object.type !== "hline") {
                         item.rowOff = (object.y - anchorTop) / unit;
                         item.hRows = object.height / unit;
@@ -790,6 +908,74 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         return canvas.toDataURL("image/png");
     }
 
+    /*
+        ภาพจริงของชุด (ถ่ายจากหน้าจอตอนบันทึก) → การ์ด / ภาพตัวอย่าง / ภาพขนาดจริงบนตาราง เหมือนที่บันทึกเป๊ะ
+        ซ่อนชิ้นอื่นที่ไม่ได้อยู่ในชุดชั่วคราว แล้วตัดเฉพาะกรอบรอบชิ้นในชุด
+    */
+    const SHOT_RATIO = 2;
+    const SHOT_PAD = 6;
+
+    async function captureShot(selection, preset) {
+
+        const X = window.ZGExportImage;
+        if (!X || typeof X.capture !== "function") return null;
+
+        const keep = [];
+        const add = el => { if (el && !keep.includes(el)) keep.push(el); };
+
+        selection.ids.forEach(id => document.querySelectorAll(`.canvas-object[data-object-id="${CSS.escape(id)}"], [data-stem-for="${CSS.escape(id)}"]`).forEach(add));
+        preset.images.forEach((item, i) => add(document.querySelector(`.zg-bimg[data-img-id="${CSS.escape(selection.images[i] || "")}"]`)));
+        selection.images.forEach(id => add(document.querySelector(`.zg-bimg[data-img-id="${CSS.escape(id)}"]`)));
+        preset.texts.forEach(item => add(document.querySelector(`.zg-text-box[data-text-id="${CSS.escape(item.data.id || "")}"]`)));
+
+        /* กรอบรวม (เส้นวันที่ยาวทั้งตาราง → ใช้ป้าย / กล่องแทน) */
+        const boxes = keep
+            .filter(el => !el.matches(".canvas-object--dateline-line, .canvas-object--vline, .zg-dateline-stem, .zg-vline-stem"))
+            .map(el => el.getBoundingClientRect())
+            .filter(r => r.width > 0 && r.height > 0);
+        if (!boxes.length) return null;
+
+        const left = Math.max(0, Math.min(...boxes.map(r => r.left)) - SHOT_PAD);
+        const top = Math.max(0, Math.min(...boxes.map(r => r.top)) - SHOT_PAD);
+        const right = Math.min(window.innerWidth, Math.max(...boxes.map(r => r.right)) + SHOT_PAD);
+        const bottom = Math.min(window.innerHeight, Math.max(...boxes.map(r => r.bottom)) + SHOT_PAD);
+        if (right - left < 4 || bottom - top < 4) return null;
+
+        keep.forEach(el => el.classList.add("zg-pre-keep"));
+        document.body.classList.add("zg-pre-shot");
+
+        let full;
+        try {
+            full = await X.capture("image", { screen: true, pixelRatio: SHOT_RATIO });
+        } finally {
+            keep.forEach(el => el.classList.remove("zg-pre-keep"));
+            document.body.classList.remove("zg-pre-shot");
+        }
+
+        const out = document.createElement("canvas");
+        out.width = Math.round((right - left) * SHOT_RATIO);
+        out.height = Math.round((bottom - top) * SHOT_RATIO);
+        out.getContext("2d").drawImage(full, Math.round(left * SHOT_RATIO), Math.round(top * SHOT_RATIO), out.width, out.height, 0, 0, out.width, out.height);
+
+        /* จุดอ้างอิงของชุด (วันแรก + แถวบนสุด) อยู่ตรงไหนในภาพ → ใช้วางภาพขนาดจริงบนตาราง */
+        const vp = viewportRect();
+        /* จุดอ้างอิงของชุด = วันแรกสุด (ตอนบันทึก · ใช้ชั่วคราว ไม่เก็บ) + แถวบนสุด */
+        const anchorDay = Number(preset._anchorDay) || 0;
+        const rowsTop = rowTops()[Number(preset.anchor.rowIndex) || 0] || 0;
+        const ax = vp.left + anchorDay * ppd() - timelineViewport.scrollLeft;
+        const ay = vp.top + rowsTop - verticalScrollY;
+
+        return {
+            src: out.toDataURL("image/png"),
+            w: right - left,
+            h: bottom - top,
+            ox: ax - left,
+            oy: ay - top,
+            ppd: ppd(),
+            unit: rowUnit()
+        };
+    }
+
     async function saveSelection(name) {
 
         const selection = currentSelection();
@@ -810,9 +996,18 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         }
 
         try {
-            preset.thumb = await drawThumb(preset);
+            const shot = await captureShot(selection, preset);
+            delete preset._anchorDay;
+            if (shot) {
+                preset.shot = shot;
+                preset.thumb = shot.src;
+            } else {
+                preset.thumb = await drawThumb(preset);
+            }
         } catch (error) {
-            preset.thumb = "";
+            console.error("[presets.js] shot", error);
+            delete preset._anchorDay;
+            try { preset.thumb = await drawThumb(preset); } catch (inner) { preset.thumb = ""; }
         }
 
         await loadLocal();
@@ -875,6 +1070,9 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                 const date = new Date(timelineStartDate);
                 date.setHours(0, 0, 0, 0);
                 date.setDate(date.getDate() + day + item.dateOff);
+                /* เส้นที่ลากไว้ระหว่างวัน → อยู่ตำแหน่งเดิมในวันนั้นพอดี (ชุดเก่า: อ่านจากวันที่ที่เก็บไว้) */
+                const frac = item.dateFrac !== undefined ? Number(item.dateFrac) : fractionOfDay(item.data.linkedHeaderDate);
+                if (frac > 0) date.setTime(date.getTime() + frac * DAY_MS);
                 object.linkedHeaderDate = date;
 
             } else {
@@ -894,6 +1092,27 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         timelineObjects.push(...added);
 
         renderObjects();
+
+        /*
+            ห้ามเพี้ยน: กล่องงานยาวตามจำนวนวันเสมอ (วันที่ถูกต้อง) แต่ px ต่อวันของแผนที่วางอาจต่างจากตอนบันทึกนิดหน่อย
+            → กล่องกว้าง/แคบลงนิด ข้อความที่พอดีกล่องพอดีจะขึ้นบรรทัดใหม่
+            แก้: ล็อกความกว้างช่องข้อความให้เท่าตอนบันทึก (px) → ตัดบรรทัดเหมือนเดิมทุกตัวอักษร
+        */
+        let roomChanged = false;
+        preset.objects.forEach(item => {
+            const saved = Number(item.labelRoom);
+            const object = added.find(entry => entry.id === idMap[item.data.id]);
+            if (!(saved > 0) || !object || object.type !== "task" || Number(object.textRotate)) return;
+            const now = labelRoomOf(object.id);
+            if (!(now > 0) || Math.abs(now - saved) < 0.01) return;
+            const ratio = Number(object.labelWidth) > 0 ? Number(object.labelWidth) : 1;
+            let target = ratio * saved;
+            /* ข้อความที่ลากไว้ตำแหน่งอิสระ: label-drag.js จำกัดกว้างสุด = ช่อง − 4px (ถ้าไม่ได้ยืดเกินกล่อง) */
+            if (object.labelPos && ratio <= 1) target = Math.min(target, saved - 4);
+            object.labelWidth = Number((target / now).toFixed(6));
+            roomChanged = true;
+        });
+        if (roomChanged) renderObjects();
 
         /* รูป / รูปแปะ */
         const newImages = [];
@@ -973,7 +1192,17 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
     }
 
     /* วางชุดเริ่มที่วันที่เลือก — นอกช่วงตาราง → ขยายช่วงให้ก่อน แล้วเลื่อนจอไปให้เห็น */
-    function placeAtDate(preset, date) {
+    /* วัน + แถวเดิมตอนบันทึก (ชุดเก่าที่ไม่ได้จำไว้ → null) */
+    /* แถวเดิมตอนบันทึก (ไม่จำวันที่) */
+    function savedPlace(preset) {
+        const anchor = preset && preset.anchor;
+        if (!anchor || !Number.isInteger(Number(anchor.rowIndex))) return null;
+        const tops = rowTops();
+        const index = Number(anchor.rowIndex);
+        return { top: index >= 0 && index < tops.length ? tops[index] : null };
+    }
+
+    function placeAtDate(preset, date, savedTop) {
 
         const span = presetSpan(preset);
         let changed = false;
@@ -994,18 +1223,32 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         }
 
         const day = dayNumber(date) - startDay();
-        const top = rowTopAtOrBelow(verticalScrollY);
+        const top = Number.isFinite(savedTop) ? savedTop : rowTopAtOrBelow(verticalScrollY);
 
-        timelineViewport.scrollLeft = Math.max(0, day * ppd() - Math.min(120, timelineViewport.clientWidth * 0.12));
-        timelineViewport.dispatchEvent(new Event("scroll"));
+        /* เลื่อนจอเฉพาะเมื่อวันนั้นอยู่นอกช่วงที่เห็น */
+        const x = day * ppd();
+        const view = timelineViewport;
+        if (x < view.scrollLeft || x > view.scrollLeft + view.clientWidth - 40) {
+            view.scrollLeft = Math.max(0, x - Math.min(120, view.clientWidth * 0.12));
+            view.dispatchEvent(new Event("scroll"));
+        }
 
         placePreset(preset, day, top);
     }
 
     /* คลิกการ์ด = วางตรงวันที่เลือกไว้ หรือช่วงที่เห็นบนจอ (เว้นจากขอบซ้ายนิดหน่อย) */
     function placeInView(preset) {
+        const saved = savedPlace(preset);
+        /* เลือกวันใน "📅 วางที่" ไว้ → วันนั้น (แถวเดิม) */
         if (placeDate) {
-            placeAtDate(preset, placeDate);
+            placeAtDate(preset, placeDate, saved ? saved.top : undefined);
+            return;
+        }
+        /* ค่าเริ่มต้น: ช่วงที่เห็นบนจอ · แถวเดิมตอนบันทึก (การจัดวางเหมือนที่บันทึกไว้เป๊ะ) */
+        if (saved && Number.isFinite(saved.top)) {
+            const perDay = ppd();
+            const day = Math.round((timelineViewport.scrollLeft + Math.min(120, timelineViewport.clientWidth * 0.12)) / perDay);
+            placePreset(preset, day, saved.top);
             return;
         }
         const perDay = ppd();
@@ -1165,7 +1408,9 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         }
 
         const members = groupMembers(activeGroup);
-        pill.querySelector("[data-name]").textContent = `⭐ ${members.name || L("ชุดสำเร็จ", "Preset set", "セット")}`;
+        pill.querySelector("[data-name]").textContent = isManualGroup(activeGroup)
+            ? `🔗 ${members.name || L("กลุ่ม", "Group", "グループ")} · ${members.ids.length + members.images.length + members.texts.length}`
+            : `⭐ ${members.name || L("ชุดสำเร็จ", "Preset set", "セット")}`;
         pill.style.display = "";
         pill.style.left = `${Math.max(6, rect.left)}px`;
         pill.style.top = `${Math.max(30, rect.top - 6)}px`;
@@ -1185,6 +1430,30 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         }
         requestAnimationFrame(follow);
     })();
+
+
+    /* Ctrl+G = จัดกลุ่มที่เลือก · Ctrl+Shift+G = แยกกลุ่ม (ไม่ทำงานตอนพิมพ์ข้อความ) */
+    document.addEventListener("keydown", event => {
+
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || (event.key || "").toLowerCase() !== "g") return;
+
+        const target = event.target instanceof Element ? event.target : null;
+        if (target && target.closest("input, textarea, select, [contenteditable='true']")) return;
+
+        event.preventDefault();
+
+        if (event.shiftKey) {
+            const groupId = activeGroup || (() => {
+                const selection = currentSelection();
+                const object = selection.ids.map(findObject).find(item => item && item.zgGroup);
+                return object ? object.zgGroup : (selection.images.map(groupOfImage).find(Boolean) || selection.texts.map(groupOfText).find(Boolean) || null);
+            })();
+            if (groupId) ungroup(groupId);
+            return;
+        }
+
+        createGroup();
+    });
 
 
     /* =====================================================
@@ -1250,6 +1519,8 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                 }
 
                 if (target.closest("[data-q-ok]")) quickSave();
+
+                if (target.closest("[data-q-group]")) createGroup();
             });
 
             document.body.appendChild(quick);
@@ -1259,6 +1530,7 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         if (!quickNaming) {
             const label = quick.querySelector("[data-q-count]");
             if (label) label.textContent = `(${count})`;
+            paintQuickGroup();
         }
 
         quick.style.display = "";
@@ -1266,12 +1538,20 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         quick.style.top = `${Math.max(quick.offsetHeight + 4, rect.top - 6)}px`;
     }
 
+    /* ปุ่ม 🔗 จัดกลุ่ม: โชว์เมื่อเลือกตั้งแต่ 2 ชิ้น */
+    function paintQuickGroup() {
+        const button = quick && quick.querySelector("[data-q-group]");
+        if (button) button.hidden = selectionCount() < 2;
+    }
+
     function renderQuick() {
 
         if (!quick) return;
 
         if (!quickNaming) {
-            quick.innerHTML = `<button type="button" data-q-start title="บันทึกที่เลือกเป็นชุดสำเร็จ">⭐ ${escapeHtml(L("บันทึกเป็นชุด", "Save as set", "セットに保存"))} <span data-q-count></span></button>`;
+            quick.innerHTML = `<button type="button" data-q-group title="${escapeHtml(L("จัดกลุ่มที่เลือก — คลิกชิ้นไหนก็เลือกทั้งกลุ่ม (Ctrl+G)", "Group selection (Ctrl+G)", "グループ化 (Ctrl+G)"))}">🔗 ${escapeHtml(L("จัดกลุ่ม", "Group", "グループ化"))}</button>` +
+                `<button type="button" data-q-start title="บันทึกที่เลือกเป็นชุดสำเร็จ">⭐ ${escapeHtml(L("บันทึกเป็นชุด", "Save as set", "セットに保存"))} <span data-q-count></span></button>`;
+            paintQuickGroup();
             return;
         }
 
@@ -1357,11 +1637,18 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
 
     function rowLabel(top) {
         const unit = rowUnit();
-        const index = Math.floor((top + 0.5) / unit);
-        const category = (Array.isArray(categories) ? categories : [])[index];
+        /* หมวดสูงไม่เท่ากัน (หมวด Payment) → ไล่หาจากขอบจริง */
+        let start = 0;
+        let height = unit;
+        const category = (Array.isArray(categories) ? categories : []).find(item => {
+            height = unit * (typeof categoryScaleOf === "function" ? categoryScaleOf(item) : 1);
+            if (top + 0.5 < start + height) return true;
+            start += height;
+            return false;
+        });
         if (!category) return "";
         const rows = category.rows || [];
-        const rowIndex = Math.min(rows.length - 1, Math.floor(((top - index * unit) + 0.5) / (unit / Math.max(1, rows.length))));
+        const rowIndex = Math.min(rows.length - 1, Math.floor(((top - start) + 0.5) / (height / Math.max(1, rows.length))));
         const row = rows[rowIndex];
         const rowText = row && row.text && !/^type\.\.\.$/.test(row.text) ? ` · ${row.text}` : "";
         return `${category.name || ""}${rowText}`;
@@ -1749,8 +2036,12 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         }
     }
 
-    function defaultPlace() {
+    function defaultPlace(preset) {
+        const saved = savedPlace(preset);
         const perDay = ppd();
+        if (saved && Number.isFinite(saved.top)) {
+            return { day: Math.round((timelineViewport.scrollLeft + Math.min(120, timelineViewport.clientWidth * 0.12)) / perDay), top: saved.top };
+        }
         return {
             day: Math.round((timelineViewport.scrollLeft + Math.min(120, timelineViewport.clientWidth * 0.12)) / perDay),
             top: rowTopAtOrBelow(verticalScrollY)
@@ -1777,7 +2068,8 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                     <span class="zg-pre-peek-name">⭐ ${escapeHtml(preset.name)}</span>
                     <span class="zg-pre-peek-sub">${escapeHtml(L(`${rows.length} ชิ้น · ยาว ${span} วัน`, `${rows.length} pieces · ${span} days`, `${rows.length} 個 · ${span} 日間`))}${preset.team ? " · ทีม" : ""}</span>
                 </div>
-                <div class="zg-pre-peek-drop out" data-peek-drop>${escapeHtml(L("ลากไปปล่อยบนตาราง หรือคลิกเพื่อวางตรงช่วงที่เห็น", "Drag onto the table, or click to place in view", "表へドラッグ、またはクリックで配置"))}</div>
+                <div class="zg-pre-peek-drop out" data-peek-drop>${escapeHtml(L("คลิก = วางที่เดิมตอนบันทึก (กรอบเส้นประเขียวบนตาราง) · หรือลากไปปล่อยตรงไหนก็ได้", "Click = place exactly where it was saved · or drag anywhere", "クリック＝保存した位置に配置 · ドラッグで任意の位置"))}</div>
+                ${preset.shot ? `<img class="zg-pre-peek-shot" alt="" src="${escapeHtml(preset.shot.src)}">` : ""}
                 <ul class="zg-pre-peek-list">${rows.slice(0, 8).map(row => `<li><b>${row.icon}</b><span>${escapeHtml(row.text)}</span><em>${escapeHtml(row.meta)}</em></li>`).join("")}
                 ${rows.length > 8 ? `<li><b></b><span>${escapeHtml(L(`… อีก ${rows.length - 8} ชิ้น`, `… ${rows.length - 8} more`, `… 他 ${rows.length - 8} 個`))}</span><em></em></li>` : ""}</ul>`;
 
@@ -1793,7 +2085,7 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             return;
         }
 
-        const where = place || defaultPlace();
+        const where = place || defaultPlace(preset);
 
         if (!peekState || peekState.preset !== preset || peekState.day !== where.day || peekState.top !== where.top) {
             peekState = { preset, day: where.day, top: where.top };
@@ -1849,11 +2141,58 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
         ghostLoop = 0;
     }
 
+    const shotImages = new Map();
+
+    function shotImage(preset) {
+        if (!preset.shot || !preset.shot.src) return null;
+        let img = shotImages.get(preset.id);
+        if (!img) {
+            img = new Image();
+            img.onload = () => { ghostKey = ""; };
+            img.src = preset.shot.src;
+            shotImages.set(preset.id, img);
+        }
+        return img.complete && img.naturalWidth ? img : null;
+    }
+
     function drawGhost() {
 
         if (!ghost || !ghostState) return;
 
         const { preset, day, top } = ghostState;
+
+        /* ชุดที่มีภาพจริง → วางภาพจริงขนาดจริง ณ จุดที่จะวาง (เหมือนที่บันทึกเป๊ะ) */
+        const real = shotImage(preset);
+        if (real) {
+            const keyReal = ["shot", day, top, timelineViewport.scrollLeft, verticalScrollY, ppd(), rowUnit(), window.innerWidth, window.innerHeight].join("|");
+            if (keyReal === ghostKey) return;
+            ghostKey = keyReal;
+            const dpr = window.devicePixelRatio || 1;
+            const W = window.innerWidth, H = window.innerHeight;
+            if (ghost.width !== Math.round(W * dpr) || ghost.height !== Math.round(H * dpr)) {
+                ghost.width = Math.round(W * dpr);
+                ghost.height = Math.round(H * dpr);
+            }
+            const g = ghost.getContext("2d");
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, W, H);
+            const vp = viewportRect();
+            const sx = preset.shot.ppd > 0 ? ppd() / preset.shot.ppd : 1;
+            const sy = preset.shot.unit > 0 ? rowUnit() / preset.shot.unit : 1;
+            const ax = vp.left + day * ppd() - timelineViewport.scrollLeft;
+            const ay = vp.top + top - verticalScrollY;
+            const w = preset.shot.w * sx, h = preset.shot.h * sy;
+            const x = ax - preset.shot.ox * sx, y = ay - preset.shot.oy * sy;
+            g.globalAlpha = 0.82;
+            g.drawImage(real, x, y, w, h);
+            g.globalAlpha = 1;
+            g.setLineDash([6, 4]);
+            g.strokeStyle = "#3a8a4f";
+            g.lineWidth = 1.5;
+            g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+            g.setLineDash([]);
+            return;
+        }
         const perDay = ppd();
         const unit = rowUnit();
         const scrollX = timelineViewport.scrollLeft;
@@ -2123,9 +2462,9 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
 
     function placeNote() {
         if (!placeDate) {
-            return L("ยังไม่เลือกวัน → คลิกการ์ด = วางตรงช่วงที่เห็นบนจอ",
-                "No date → click a card to place it in view",
-                "日付なし → 表示中の位置に配置");
+            return L("ยังไม่เลือกวัน → คลิกการ์ด = วางที่เดิม (วัน + แถว) ตอนบันทึก",
+                "No date → click a card to place it where it was saved",
+                "日付なし → 保存した位置に配置");
         }
         const day = dayNumber(placeDate) - startDay();
         return L(`คลิกการ์ด = วางเริ่ม ${dayLabel(day)} (นอกช่วงตาราง → ขยายช่วงให้อัตโนมัติ)`,
@@ -2171,12 +2510,12 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
             <label class="zg-pre-place ${placeDate ? "is-set" : ""}">
                 <span class="zg-pre-place-label">📅 ${escapeHtml(L("วางที่วันที่", "Place on", "配置日"))}</span>
                 <input type="date" data-place value="${placeDate ? formatDateInputValue(placeDate) : ""}" aria-label="${escapeHtml(L("วันที่จะวางชุด", "Date to place the set", "配置する日付"))}">
-                <button type="button" class="zg-pre-place-clear" data-place-clear ${placeDate ? "" : "hidden"} title="${escapeHtml(L("ล้างวันที่ (กลับไปวางตรงช่วงที่เห็น)", "Clear (place in view)", "クリア"))}">✕</button>
+                <button type="button" class="zg-pre-place-clear" data-place-clear ${placeDate ? "" : "hidden"} title="${escapeHtml(L("ล้างวันที่ (กลับไปวางที่เดิมตอนบันทึก)", "Clear (place where it was saved)", "クリア"))}">✕</button>
             </label>
             <div class="zg-pre-place-note" data-place-note>${escapeHtml(placeNote())}</div>` : ""}
             ${list.length ? `<div class="zg-pre-grid">${list.map(item => `
                 <div class="zg-pre-card" data-id="${escapeHtml(item.id)}">
-                    ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" alt="">` : `<img alt="">`}
+                    ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" alt="" class="${item.shot ? "is-shot" : ""}">` : `<div class="zg-pre-nothumb" aria-hidden="true">⭐</div>`}
                     ${item.team ? `<span class="zg-pre-team">ทีม</span>` : `<button type="button" class="zg-pre-del" data-del title="ลบชุดนี้">✕</button>`}
                     <div class="zg-pre-name">${escapeHtml(item.name)}</div>
                     <div class="zg-pre-meta">${escapeHtml(L(`${item.objects.length + (item.images || []).length + (item.texts || []).length} ชิ้น`, `${item.objects.length + (item.images || []).length + (item.texts || []).length} pieces`, `${item.objects.length + (item.images || []).length + (item.texts || []).length} 個`))}</div>
@@ -2186,7 +2525,7 @@ body.zg-dark .zg-pre-ask { background: #2f2a1c; border-color: #5a4f2a; }
                 <button type="button" data-export title="ดาวน์โหลดชุดของฉันเป็นไฟล์">⬆ Export</button>
                 <button type="button" data-import title="เพิ่มชุดจากไฟล์">⬇ Import</button>
             </div>
-            <div class="zg-pre-hint">คลิก = วางตรงวันที่เลือก (ว่าง = ช่วงที่เห็น) · ลากไปวาง = วางตรงวัน / แถวที่ปล่อย<br>วางแล้วลากย้ายได้ทั้งชุด · Alt + คลิก = เลือกชิ้นเดียว</div>`;
+            <div class="zg-pre-hint">คลิก = วางที่เดิมตอนบันทึก (เลือกวันใน 📅 = วันนั้น แถวเดิม) · ลากไปวาง = วางตรงวัน / แถวที่ปล่อย<br>วางแล้วลากย้ายได้ทั้งชุด · Alt + คลิก = เลือกชิ้นเดียว</div>`;
 
         if (asking) {
             const input = panel.querySelector("[data-name]");

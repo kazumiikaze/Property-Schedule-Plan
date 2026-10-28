@@ -8,11 +8,11 @@
         พิมพ์ทับได้เลย · ไม่ติดไปตอน Export / พิมพ์
    2) ขยายตอนพิมพ์: ตัวหนังสือใหญ่ 13px + พื้นขาว + กรอบเขียว
    3) พิมพ์ต่อเนื่องแบบ Excel
-        Enter        เสร็จ → ไปช่องชื่อของแถวถัดไป
+        Enter        ขึ้นบรรทัดใหม่ (ชื่อหมวด / ชื่อแถว / บทบาท — name-lines.js)
+        Ctrl+Enter   เสร็จ → ไปช่องชื่อของแถวถัดไป
                      (แถวสุดท้ายของหมวด → ถามว่าจะเพิ่มแถวใหม่ไหม)
         Tab          ชื่อ → บทบาท → ชื่อแถวถัดไป
         Shift+Tab    ย้อนกลับ
-        Shift+Enter  ขึ้นบรรทัดใหม่ (เฉพาะชื่อแถว)
         Esc          ยกเลิก คืนข้อความเดิม
       วางข้อความ = วางเป็นตัวหนังสือธรรมดา (ไม่ติดสี/ฟอนต์จากที่อื่น)
    4) ช่วยเติมคำ: รายชื่อ/บทบาท/หมวดที่เคยใช้ในทุกแผน + บทบาทสำเร็จรูป
@@ -38,17 +38,36 @@
             selector: ".party-role[contenteditable='true']",
             placeholder: "บทบาท (เช่น Seller / Buyer)",
             defaults: ["type..."],
-            multiline: false
+            multiline: true
         },
         category: {
             selector: ".category-name[contenteditable='true']",
             placeholder: "ชื่อหมวดหมู่",
             defaults: ["Category"],
-            multiline: false
+            multiline: true
         }
     };
 
     const ALL_SELECTOR = Object.values(FIELDS).map(field => field.selector).join(", ");
+
+    /* สีตัวอักษรที่ผู้ใช้ตั้งเอง (row-style.js ใส่ไว้ตรง ๆ) อ่อนจนมองไม่เห็นบนพื้นขาวไหม */
+    function isLightText(element) {
+        const value = element.style.getPropertyValue("color");
+        if (!value) return false;
+        const probe = document.createElement("span");
+        probe.style.color = value;
+        document.body.appendChild(probe);
+        const rgb = (getComputedStyle(probe).color.match(/[\d.]+/g) || []).map(Number);
+        probe.remove();
+        if (rgb.length < 3) return false;
+        const [r, g, b] = rgb.slice(0, 3).map(v => {
+            const c = v / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        /* ตัดสินด้วยความสว่าง: บนพื้นขาวคอนทราสต์ต่ำกว่า 2:1 = อ่อนจนอ่านไม่ออก (ขาว ครีม เหลืองอ่อน) · ส้ม/เขียวปกติยังใช้พื้นขาว */
+        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return (1.05) / (luminance + 0.05) < 2;
+    }
 
     const ROLE_PRESETS = [
         "Seller", "Buyer", "Agent", "Broker", "Land Office", "IEAT", "Bank", "Lawyer", "Consultant", "Contractor",
@@ -98,7 +117,7 @@ body.zg-exporting .zg-ph:empty::before { content: none !important; }
     border-radius: 5px;
     box-shadow: 0 0 0 2px #3a8a4f, 0 4px 14px rgba(0, 0, 0, .18) !important;
     outline: none !important;
-    white-space: normal;
+    white-space: pre-wrap;
     overflow: visible !important;
     text-overflow: clip !important;
     -webkit-line-clamp: unset !important;
@@ -106,6 +125,11 @@ body.zg-exporting .zg-ph:empty::before { content: none !important; }
 }
 .party-role.zg-rowedit-on { font-weight: 400; }
 .zg-rowedit-on.zg-ph:empty::before { color: #9aa49f; }
+/* ตั้งสีตัวอักษรอ่อน (เช่น ขาว) ไว้ → ตอนพิมพ์ใช้พื้นเข้มแทนพื้นขาว ยังเห็นสีจริงที่ตั้งไว้ */
+.party-main.zg-rowedit-on.zg-rowedit-dark,
+.party-role.zg-rowedit-on.zg-rowedit-dark,
+.category-name.zg-rowedit-on.zg-rowedit-dark { background: #26302b !important; caret-color: #ffffff; }
+.zg-rowedit-on.zg-rowedit-dark.zg-ph:empty::before { color: rgba(255, 255, 255, .55); }
 
 /* 4) รายการคำแนะนำ */
 .zg-suggest {
@@ -478,6 +502,7 @@ body.zg-exporting .zg-addrow-ask { display: none !important; }
         editing = { element, key, original: element.textContent };
 
         element.classList.add("zg-rowedit-on");
+        element.classList.toggle("zg-rowedit-dark", isLightText(element));
 
         const host = element.closest(".party-row, .category-cell, .category, .category-block") || element.parentElement;
 
@@ -498,13 +523,13 @@ body.zg-exporting .zg-addrow-ask { display: none !important; }
 
         if (!key) return;
 
-        element.classList.remove("zg-rowedit-on");
+        element.classList.remove("zg-rowedit-on", "zg-rowedit-dark");
 
         document.querySelectorAll(".zg-rowedit-host").forEach(node => node.classList.remove("zg-rowedit-host"));
 
         /* จัดข้อความให้สะอาด (ตัดช่องว่างหัวท้าย) */
         const clean = FIELDS[key].multiline
-            ? element.textContent.replace(/ /g, " ").replace(/[ \t]+\n/g, "\n").trim()
+            ? (element.innerText || "").replace(/\r/g, "").replace(/ /g, " ").replace(/[ \t]+\n/g, "\n").trim()
             : cleanText(element.textContent).replace(/\s+/g, " ");
 
         if (clean !== element.textContent) setText(element, clean);
@@ -731,7 +756,7 @@ body.zg-exporting .zg-addrow-ask { display: none !important; }
         /* รายการคำแนะนำเปิดอยู่ → ใช้ ↑ ↓ Enter Esc กับรายการก่อน */
         if (suggest && handleSuggestKey(event)) return;
 
-        if (event.key === "Enter" && !(event.shiftKey && FIELDS[key].multiline)) {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey || !FIELDS[key].multiline)) {
 
             event.preventDefault();
             event.stopPropagation();

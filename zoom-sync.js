@@ -110,6 +110,11 @@
 
         originalCalculateTimelineGeometry();
 
+        /* ไฟล์อื่นปรับ px ต่อวันต่อได้ (day-fold.js: รวบวันแล้วช่องวันที่เหลือกว้างขึ้น) — ก่อนย้าย object ตามวันที่ */
+        if (typeof window.ZGGeometryAdjust === "function") {
+            try { window.ZGGeometryAdjust(); } catch (error) { console.error("[zoom-sync.js] adjust", error); }
+        }
+
         syncObjectsToTimeline();
     };
 

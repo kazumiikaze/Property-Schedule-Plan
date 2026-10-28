@@ -118,6 +118,30 @@
         return toDate(data && data.timeline && data.timeline.end);
     }
 
+    /*
+        ความกว้างต่อวัน (pxPerDay) ของ app.js = กว้างจอ ÷ จำนวนวันใน 6 เดือนนับจากวันเริ่ม
+        → 6 เดือนมี 181–184 วันแล้วแต่เดือนที่เริ่ม: เลื่อนวันเริ่มแล้วกล่องทุกกล่องกว้าง/แคบลงนิด ๆ
+          แต่ตัวอักษรเท่าเดิม → ข้อความที่พอดีกล่องพอดีขึ้นบรรทัดใหม่ (หน้าตาเพี้ยนจากที่บันทึก)
+        แก้: ปรับ zoom ชดเชยให้ px ต่อวันเท่าเดิม → กล่อง / ข้อความ เหมือนเดิมทุก px
+    */
+    function referenceDays(start) {
+        if (typeof addMonths !== "function" || typeof daysBetween !== "function") return 0;
+        return Math.max(1, daysBetween(start, addMonths(start, typeof VISIBLE_MONTHS_DEFAULT === "number" ? VISIBLE_MONTHS_DEFAULT : 6)));
+    }
+
+    /* totalDays = จำนวนวันจริงของแผน (วันเริ่ม → วันจบ ไม่รวม +1 ของ table-fit.js) */
+    function keepScaleFactor(oldStart, newStart, totalDays) {
+        /* ใช้สูตรเดียวกับ app.js (6 เดือน / พอดีทั้งแผน) */
+        if (typeof timelineFitDays === "function" && Number.isFinite(totalDays)) {
+            const a = timelineFitDays(oldStart, totalDays);
+            const b = timelineFitDays(newStart, totalDays);
+            return a > 0 && b > 0 ? b / a : 1;
+        }
+        const a = referenceDays(oldStart);
+        const b = referenceDays(newStart);
+        return a > 0 && b > 0 ? b / a : 1;
+    }
+
     function shiftData(data, days) {
 
         days = Math.round(Number(days) || 0);
@@ -131,6 +155,11 @@
         if (start) timeline.start = toText(plusDays(start, days));
         if (end) timeline.end = toText(plusDays(end, days));
 
+        if (start && Number.isFinite(Number(timeline.zoom))) {
+            const total = end ? Math.round((end - start) / 86400000) : NaN;
+            timeline.zoom = Number(timeline.zoom) * keepScaleFactor(start, plusDays(start, days), total);
+        }
+
         /* scrollLeft เป็น px นับจากวันเริ่ม → คงไว้ (เห็นช่วงเดิมของแผน) */
 
         (Array.isArray(data.objects) ? data.objects : []).forEach(object => {
@@ -141,6 +170,18 @@
         (Array.isArray(data.images) ? data.images : []).forEach(item => {
             if (item && Number.isFinite(Number(item.day))) item.day = Number(item.day) + days;
         });
+
+        /* ช่วงวันที่ซ่อน/รวบ (เก็บเป็นวันที่จริง) → เลื่อนตามแผน · ชุดเสาร์–อาทิตย์ → สร้างใหม่ตามวันของช่วงใหม่ */
+        const folds = data.dayFolds;
+        if (folds && Array.isArray(folds.items)) {
+            const weekend = folds.items.some(item => item && item.group === "weekend");
+            folds.items = folds.items.filter(item => item && item.group !== "weekend").map(item => {
+                const from = toDate(item.from);
+                const to = toDate(item.to);
+                return from && to ? { ...item, from: toText(plusDays(from, days)), to: toText(plusDays(to, days)) } : item;
+            });
+            if (weekend) folds.weekends = true;
+        }
 
         return data;
     }
@@ -160,6 +201,13 @@
         record();
 
         const newStart = plusDays(timelineStartDate, days);
+
+        /* กล่อง / ข้อความ กว้างเท่าเดิมทุก px (ดู keepScaleFactor) */
+        if (typeof zoomScale === "number") {
+            zoomScale = Math.max(typeof ZOOM_MIN === "number" ? ZOOM_MIN : 0.1,
+                Math.min(typeof ZOOM_MAX === "number" ? ZOOM_MAX : 10, zoomScale * keepScaleFactor(timelineStartDate, newStart,
+                    Math.round((timelineEndDate - timelineStartDate) / 86400000))));
+        }
 
         /* task / hline: x นับจากวันเริ่ม → บอก zoom-sync ว่าไม่ต้องแปลงกลับไปวันเดิม */
         if (window.ZGZoomSync && typeof window.ZGZoomSync.setBaseline === "function") {
@@ -187,6 +235,9 @@
 
         syncDateInputs();
         renderSchedule();
+
+        /* ช่วงวันที่ซ่อน/รวบ เลื่อนตามแผน */
+        if (window.ZGFold && typeof window.ZGFold.shift === "function") window.ZGFold.shift(days);
 
         if (typeof updateAllHorizontalRanges === "function") updateAllHorizontalRanges();
 
@@ -370,12 +421,20 @@ body.zg-exporting .zg-link-btn { visibility: hidden; }
 
             if (!days) {
                 syncDateInputs();
+                scrollToStart();
                 return;
             }
 
             shiftLive(days);
 
+            scrollToStart();
+
         }, true);
+
+        /* โหมด 🔗 ปิด → app.js เปลี่ยนวันเริ่มเอง (event ถึงช่องนี้ตามปกติ) → เลื่อนไปเริ่มที่วันนั้นด้วย */
+        startInput.addEventListener("change", () => {
+            if (!linked) scrollToStart();
+        });
     }
 
 
@@ -383,6 +442,20 @@ body.zg-exporting .zg-link-btn { visibility: hidden; }
        4) ช่องเลือก "วางแผนเริ่มที่วันที่"
        picker(container, { sourceStart, sourceEnd, initial }) → { get(), days() }
     ===================================================== */
+
+    /* เลือกวันเริ่มต้นแล้ว → ตารางเลื่อนไปเริ่มที่วันนั้น (ช่องแรกที่เห็น = วันเริ่มต้น) */
+    function scrollToStart() {
+
+        requestAnimationFrame(() => {
+
+            if (typeof timelineViewport === "undefined") return;
+
+            timelineViewport.scrollLeft = 0;
+            timelineViewport.dispatchEvent(new Event("scroll"));
+
+            if (typeof updateAllHorizontalRanges === "function") updateAllHorizontalRanges();
+        });
+    }
 
     function monthStart(date) {
         return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -406,6 +479,7 @@ body.zg-exporting .zg-link-btn { visibility: hidden; }
             { key: "source", label: options.sourceLabel || L("วันเดิมของเทมเพลต", "Original dates", "元の日付"), date: sourceStart }
         ].filter(item => item.date);
 
+        /* ค่าเริ่มต้น = วันเริ่มของผังที่เปิดอยู่ (เทมเพลตไม่จำวันที่ — จำแค่การจัดวาง · เลื่อนแล้วหน้าตาเหมือนเดิมเป๊ะ) */
         const initial = toDate(options.initial) || boardStart || sourceStart || today();
 
         container.classList.add("zg-place");

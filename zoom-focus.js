@@ -194,6 +194,14 @@ html.zg-zoom-focus .board-notes-section { min-height: 0 !important; }
 
     function layout() {
 
+        /*
+            กำลังถ่ายภาพพิมพ์ / Export (หัวแผนขยายชั่วคราว) แต่กระดานไม่ได้ถูกยืด
+            → ไม่จัดใหม่ (ไม่งั้นตารางหดตามหัวแผนที่ขยาย แล้วกล่องงานหดค้าง)
+            ถ่ายเสร็จ print-fit.js เรียก ZGZoomFocus.refresh() จัดใหม่ตามจอจริง
+            (ตอนยืดกระดานเพื่อพิมพ์ ยังจัดตามเดิม → ภาพพิมพ์เหมือนเดิม)
+        */
+        if (document.body.classList.contains("zg-print-capture") && !plan.style.height) return false;
+
         const zoom = detectZoom();
 
         const H = plan.clientHeight;
@@ -297,17 +305,18 @@ html.zg-zoom-focus .board-notes-section { min-height: 0 !important; }
 
         setBox(parts.schedule(), scheduleTop, scheduleH);
 
-        const scrollTop = scheduleTop + scheduleH + 4;
-
-        setBox(parts.scroll(), scrollTop, scrollH, chromeZoom);
-
-        const bracketTop = scrollTop + scrollH + 4;
+        /* ช่องเส้นวันที่ติดใต้ตาราง (เส้นวันที่ต่อกันไม่ขาด) · แถบเลื่อนย้ายไปใต้ช่องเส้นวันที่ */
+        const bracketTop = scheduleTop + scheduleH;
 
         setBox(parts.bracket(), bracketTop, bracketH);
 
         setBox(parts.hlineViewport(), scheduleTop, bracketTop + bracketH - scheduleTop);
 
-        const notesTop = bracketTop + bracketH + gap;
+        const scrollTop = bracketTop + bracketH + 4;
+
+        setBox(parts.scroll(), scrollTop, scrollH, chromeZoom);
+
+        const notesTop = scrollTop + scrollH + 4 + gap;
 
         const notesBoxH = scrollMode ? notesH : Math.max(40, H - footerH - notesTop);
 

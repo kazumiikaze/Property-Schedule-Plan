@@ -297,6 +297,19 @@ body.zg-exporting .canvas-object .dateline-chip-text { box-shadow: none !importa
         }
     }
 
+    /*
+        v2: จำสถานะ "เลือกไว้ก่อนแล้ว" ตั้งแต่ pointerdown (ก่อน presets.js เลือกทั้งกลุ่มให้)
+        เดิมเช็กตอน mousedown → คลิกชิ้นในกลุ่มครั้งแรก กลุ่มถูกเลือกไปแล้ว → เข้าโหมดพิมพ์ผิดจังหวะ
+    */
+    let selectedAtPointerDown = null;
+
+    window.addEventListener("pointerdown", event => {
+        const holder = objectElementOf(event.target);
+        selectedAtPointerDown = holder
+            ? { id: holder.dataset.objectId, selected: holder.classList.contains("zg-obj-selected") }
+            : null;
+    }, true);
+
     /* window (capture) ทำงานก่อน document → รู้ว่า "เลือกไว้ก่อนแล้ว" หรือยัง */
     window.addEventListener("mousedown", event => {
 
@@ -307,9 +320,13 @@ body.zg-exporting .canvas-object .dateline-chip-text { box-shadow: none !importa
             return;
         }
 
+        const early = selectedAtPointerDown && selectedAtPointerDown.id === holder.dataset.objectId
+            ? selectedAtPointerDown.selected
+            : holder.classList.contains("zg-obj-selected");
+
         press = {
             id: holder.dataset.objectId,
-            wasSelected: holder.classList.contains("zg-obj-selected"),
+            wasSelected: early,
             x: event.clientX,
             y: event.clientY
         };

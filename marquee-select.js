@@ -219,15 +219,88 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
        ลากเลื่อนตาราง: Space ค้าง / ปุ่มกลาง
     ===================================================== */
 
+    const AREA_PAN = "#timelineViewport, #bracketViewport, #objectLayerViewport";
+
     let spaceHeld = false;
+    let pointerOverTable = false;
+
+    /* v2: เมาส์อยู่บนตาราง → Space ไม่ไปกดปุ่มที่โฟกัสค้างอยู่ (เช่นปุ่มแถบเครื่องมือที่เพิ่งคลิก) */
+    window.addEventListener("pointermove", event => {
+        pointerOverTable = event.target instanceof Element && Boolean(event.target.closest(AREA_PAN));
+    }, { passive: true });
 
     window.addEventListener("keydown", event => {
         if (event.code === "Space" && !isTyping(event.target)) {
             if (!spaceHeld) document.body.classList.add("zg-space-scroll");
             spaceHeld = true;
-            if (event.target === document.body) event.preventDefault();
+            if (event.target === document.body || pointerOverTable) event.preventDefault();
         }
+    }, true);
+
+    window.addEventListener("keyup", event => {
+        if (event.code === "Space" && pointerOverTable && !isTyping(event.target)) event.preventDefault();
+    }, true);
+
+    /*
+        v2: ลากด้วยปุ่มกลางเมาส์ = เลื่อนตาราง (เดิมเขียนไว้ในวิธีใช้ แต่ยังไม่มีจริง)
+        ทั้งแนวนอน (ตาราง + ช่องเส้นวันที่ไปพร้อมกัน) และแนวตั้ง
+    */
+    let middlePan = null;
+
+    window.addEventListener("pointerdown", event => {
+        if ((event.button === 1 || (event.button === 0 && spaceHeld)) && event.target instanceof Element && event.target.closest(AREA_PAN)) event.stopPropagation();
+    }, true);
+
+    window.addEventListener("mousedown", event => {
+
+        /* ปุ่มกลาง หรือ Space ค้าง + ปุ่มซ้าย (แม้กดบน object ก็เลื่อนตาราง ไม่ลาก object) */
+        if (event.button !== 1 && !(event.button === 0 && spaceHeld)) return;
+
+        const target = event.target instanceof Element ? event.target : null;
+
+        if (!target || !target.closest(AREA_PAN)) return;
+
+        event.preventDefault();   /* ปิด autoscroll วงกลมของเบราว์เซอร์ */
+        event.stopPropagation();  /* ปุ่มกลางบน object = เลื่อนตาราง ไม่ใช่ลาก/ยืด object */
+
+        middlePan = {
+            mask: event.button === 1 ? 4 : 1,
+            x: event.clientX,
+            y: event.clientY,
+            left: timelineViewport.scrollLeft,
+            top: typeof verticalScrollY === "number" ? verticalScrollY : 0
+        };
+
+        document.body.classList.add("zg-space-scroll", "zg-middle-pan");
+
+    }, true);
+
+    window.addEventListener("mousemove", event => {
+
+        if (!middlePan) return;
+
+        if (!(event.buttons & middlePan.mask)) { endMiddlePan(); return; }
+
+        timelineViewport.scrollLeft = middlePan.left - (event.clientX - middlePan.x);
+
+        if (typeof setVerticalScroll === "function") {
+            setVerticalScroll(middlePan.top - (event.clientY - middlePan.y));
+        }
+
+        timelineViewport.dispatchEvent(new Event("scroll"));
+
+        if (typeof updateAllHorizontalRanges === "function") updateAllHorizontalRanges();
     });
+
+    function endMiddlePan() {
+        if (!middlePan) return;
+        middlePan = null;
+        document.body.classList.remove("zg-middle-pan");
+        if (!spaceHeld) document.body.classList.remove("zg-space-scroll");
+    }
+
+    window.addEventListener("mouseup", event => { if (middlePan && (event.button === 1 || event.button === 0)) endMiddlePan(); });
+    window.addEventListener("auxclick", event => { if (event.button === 1 && event.target instanceof Element && event.target.closest(AREA_PAN)) event.preventDefault(); });
 
     window.addEventListener("keyup", event => {
         if (event.code === "Space") {
@@ -238,6 +311,7 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
 
     window.addEventListener("blur", () => {
         spaceHeld = false;
+        endMiddlePan();
         document.body.classList.remove("zg-space-scroll");
     });
 
@@ -262,13 +336,33 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
 
     const AREA = "#timelineViewport, #bracketViewport";
 
+    /*
+        v3: ตารางแคบกว่าพื้นที่บนจอ (ซ่อน / รวบวัน หรือแผนไม่กี่เดือน) → ด้านขวาเป็นที่ว่าง
+        เดิมเริ่มลากคลุมจากตรงนั้นไม่ได้ (เบราว์เซอร์ไปเลือกข้อความแทน → กด Delete แล้วลบไม่ได้)
+        ตอนนี้: ที่ว่างในกรอบตาราง / ช่องเส้นวันที่ ทางขวาของคอลัมน์ชื่อ ก็เริ่มลากคลุมได้
+    */
+    const AREA_SPARE = "#scheduleArea, #bracketArea, .bracket-area, .zg-table-end-mask";
+    const SIDE_COLUMNS = "#categorySidebar, #partySidebar, .bracket-label, .category-scrollbar, .zg-vscroll, .timeline-horizontal-scroll";
+
+    function inMarqueeArea(target, clientX) {
+
+        if (target.closest(AREA)) return true;
+
+        if (!target.closest(AREA_SPARE) || target.closest(SIDE_COLUMNS)) return false;
+
+        /* ต้องอยู่ทางขวาของคอลัมน์ชื่อหมวด / ผู้เกี่ยวข้อง */
+        const left = timelineViewport.getBoundingClientRect().left;
+
+        return clientX >= left;
+    }
+
     document.addEventListener("mousedown", event => {
 
         if (event.button !== 0 || spaceHeld || event.altKey || event.ctrlKey || event.metaKey) return;
 
         const target = event.target instanceof Element ? event.target : null;
 
-        if (!target || !target.closest(AREA) || target.closest(EMPTY_EXCLUDE)) return;
+        if (!target || !inMarqueeArea(target, event.clientX) || target.closest(EMPTY_EXCLUDE)) return;
 
         /* กัน drag-scroll ของตาราง */
         event.preventDefault();
@@ -541,7 +635,8 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
         let dy = 0;
 
         if (lead.type === "dateline" || lead.type === "vline") {
-            dDays = state.originDate ? dayDiff(new Date(state.originDate), new Date(lead.linkedHeaderDate)) : 0;
+            /* เส้นวันที่ลากได้อิสระ (ระหว่างวัน) → รูป / กล่องข้อความที่เลือกไว้เลื่อนตามเท่ากันเป๊ะ */
+            dDays = state.originDate ? (dateToLeft(lead.linkedHeaderDate) - dateToLeft(new Date(state.originDate))) / pxPerDay : 0;
         } else {
             /* กล่องงานเลื่อนแบบ px อิสระ (ไม่ปัดเป็นวัน) → รูป / กล่องข้อความต้องเลื่อนเท่ากันเป๊ะ ไม่งั้นเหลื่อมทีละนิด */
             dDays = (lead.x - state.originX) / pxPerDay;
@@ -590,8 +685,11 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
         const text = target.closest(".zg-text-box[data-text-id]");
 
         const onImage = image && selectedImages.has(image.dataset.imgId) && !target.closest(".zg-bimg-handle");
-        const onText = text && selectedTexts.has(text.dataset.textId) &&
-            !target.closest(".zg-text-content, .zg-text-controls, .zg-text-handle");
+        /* v2: กดที่ตัวหนังสือก็ลากทั้งกลุ่ม (ยกเว้นกำลังพิมพ์อยู่ในกล่องนั้น) — เดิมกล่องข้อความหลุดออกมาชิ้นเดียว */
+        const content = text ? text.querySelector(".zg-text-content") : null;
+        const typing = Boolean(content && document.activeElement === content && target.closest(".zg-text-content"));
+        const onText = text && selectedTexts.has(text.dataset.textId) && !typing &&
+            !target.closest(".zg-text-controls, .zg-text-handle");
 
         if (!onImage && !onText) return;
 
@@ -615,16 +713,32 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
             texts: textsToShift(),
             dxScreen: 0,
             dyScreen: 0,
-            moved: false
+            moved: false,
+            content: onText && target.closest(".zg-text-content") ? content : null
         };
 
     }, true);
+
+    /* drag-autoscroll.js: ตารางเลื่อนเองระหว่างลากกลุ่ม → กลุ่มต้องไปไกลขึ้นเท่าที่ตารางเลื่อน */
+    window.addEventListener("zg:drag-scroll", event => {
+        const px = event.detail && Number(event.detail.px);
+        if (move && Number.isFinite(px)) move.x -= px * move.scale;
+    });
+
+    /* ขยายตารางไปทางซ้ายระหว่างลาก → เนื้อหาเลื่อนขวา */
+    window.addEventListener("zg:timeline-shift", event => {
+        const px = event.detail && Number(event.detail.px);
+        const ratio = event.detail && Number(event.detail.ratio) > 0 ? Number(event.detail.ratio) : 1;
+        if (!move || !Number.isFinite(px)) return;
+        move.objects.forEach(item => { if (Number.isFinite(item.x)) item.x = item.x * ratio + px; });
+    });
 
     window.addEventListener("pointermove", event => {
 
         if (!move) return;
 
-        const dxPx = (event.clientX - move.x) / move.scale;
+        /* day-fold.js: ข้ามแถบวันที่ซ่อน = ข้ามหลายวัน */
+        const dxPx = (window.ZGFold ? window.ZGFold.delta(move.x, event.clientX) : event.clientX - move.x) / move.scale;
         const dyPx = (event.clientY - move.y) / move.scale;
 
         if (!move.moved && Math.hypot(dxPx, dyPx) < START_DISTANCE) return;
@@ -671,7 +785,19 @@ body.zg-exporting .zg-text-box.zg-marq-text { outline: none !important; }
 
         document.body.classList.remove("zg-group-moving");
 
-        if (!current.moved) return;
+        if (!current.moved) {
+            /* คลิกตัวหนังสือเฉย ๆ (ไม่ได้ลาก) → เข้าโหมดพิมพ์เหมือนเดิม */
+            if (current.content && current.content.isConnected) {
+                current.content.focus();
+                const range = document.createRange();
+                range.selectNodeContents(current.content);
+                range.collapse(false);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            return;
+        }
 
         commitTexts(current.texts, current.dxScreen, current.dyScreen);
 

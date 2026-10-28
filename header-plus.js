@@ -105,6 +105,9 @@
         base.dualLogo = Boolean(raw.dualLogo);
         base.showSummary = raw.showSummary !== false;
         base.syncPlanName = raw.syncPlanName !== false;
+        /* ผู้ใช้พิมพ์ข้อความที่บังเอิญตรงกับข้อความตัวอย่างเอง → ไม่ล้างทิ้งตอนโหลด */
+        base.typedTitle = raw.typedTitle === true;
+        base.typedSubtitle = raw.typedSubtitle === true;
 
         return base;
     }
@@ -754,19 +757,23 @@ body.zg-exporting .zg-hd-pop { display: none !important; }
     }
 
     /* 8) บรรทัดรอง */
-    function decorateSubtitle() {
+    /*
+        ข้อความตัวอย่างเดิม ("Property schedule plan" / "title") → ล้างให้เห็นคำแนะนำจาง ๆ แทน
+        ทำเฉพาะตอนโหลดแผน (clearSamples) — ตอนผู้ใช้พิมพ์เสร็จไม่ล้าง (เดิมพิมพ์คำเดียวกันแล้วหายไป)
+    */
+    function decorateSubtitle(clearSamples) {
 
         titleEl.classList.add("zg-hd-empty");
         titleEl.dataset.placeholder = "พิมพ์หัวข้อแผน";
 
-        if (document.activeElement !== titleEl && TITLE_DEFAULTS.includes(titleEl.textContent.trim())) {
+        if (clearSamples !== false && !settings.typedTitle && document.activeElement !== titleEl && TITLE_DEFAULTS.includes(titleEl.textContent.trim())) {
             titleEl.textContent = "";
         }
 
         subtitleEl.classList.add("zg-hd-empty");
         subtitleEl.dataset.placeholder = "ชื่อลูกค้า / โครงการ";
 
-        if (document.activeElement !== subtitleEl && SUBTITLE_DEFAULTS.includes(subtitleEl.textContent.trim())) {
+        if (clearSamples !== false && !settings.typedSubtitle && document.activeElement !== subtitleEl && SUBTITLE_DEFAULTS.includes(subtitleEl.textContent.trim())) {
             subtitleEl.textContent = "";
         }
     }
@@ -832,11 +839,15 @@ body.zg-exporting .zg-hd-pop { display: none !important; }
 
             if (clean !== element.textContent) element.textContent = clean;
 
-            if (element === titleEl) decorateSubtitle();
+            /* พิมพ์คำที่ตรงกับข้อความตัวอย่างเอง → จำไว้ว่าผู้ใช้ตั้งใจพิมพ์ (ไม่ล้างตอนโหลดครั้งหน้า) */
+            if (element === titleEl) settings.typedTitle = Boolean(clean) && TITLE_DEFAULTS.includes(clean);
+            if (element === subtitleEl) settings.typedSubtitle = Boolean(clean) && SUBTITLE_DEFAULTS.includes(clean);
+
+            if (element === titleEl) decorateSubtitle(false);
 
             if (element === subtitleEl) {
 
-                decorateSubtitle();
+                decorateSubtitle(false);
 
                 /* 9) ชื่อแผนตามบรรทัดรอง */
                 if (settings.syncPlanName && clean && window.ZGPlans && typeof window.ZGPlans.renameCurrent === "function") {
