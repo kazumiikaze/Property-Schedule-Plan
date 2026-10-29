@@ -227,10 +227,18 @@
         if (!(days > 0)) return;
         const base = pxPerDay;
         const target = base * days;
-        /* หา px ต่อวันที่ทำให้ช่วงที่แสดงกว้างเท่า target (ความกว้างเพิ่มตาม px ต่อวันเสมอ) */
+        /*
+            คิดจาก "ทั้งแผน" ไม่ใช่แค่ช่วงที่แสดง:
+            - แผนยาวกว่าหน้าจอ (เช่น 7+ เดือนในมุมมอง 6 เดือน) → เดือนถัดไปเลื่อนเข้ามาเติมที่ว่างที่ถูกรวบ ช่องวันไม่ขยาย
+            - เดือนที่เหลือเลื่อนมาแล้วยังไม่เต็มหน้า → ขยายช่องวันเท่าที่ขาด
+            - แผนไม่เกินหน้าจอ → ขยายให้เต็มหน้าเหมือนเดิม
+        */
+        const span = Math.max(days, total);
+        if (displayWidthFor(base, span) >= target - 0.5) return;
+        /* หา px ต่อวันที่ทำให้ทั้งแผนกว้างเท่า target (ความกว้างเพิ่มตาม px ต่อวันเสมอ) */
         let ppd = base;
         for (let i = 0; i < 8; i += 1) {
-            const shown = displayWidthFor(ppd, days);
+            const shown = displayWidthFor(ppd, span);
             if (!(shown > 0)) break;
             const next = ppd * target / shown;
             if (Math.abs(next - ppd) < 1e-6) break;
