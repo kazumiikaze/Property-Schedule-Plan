@@ -408,6 +408,8 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
     let storageAvailable = true;
 
+    let holdUnreadable = false;
+
 
     function readStore() {
 
@@ -1560,14 +1562,44 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
             store = { activeId: plan.id, plans: [plan] };
 
-            writeStore();
+            /*
+                มีข้อมูลเดิมอยู่แต่อ่านไม่ได้ → ห้ามเขียนทับทันที
+                เก็บสำเนาไว้ก่อน (plan-backup.js ก็จับไว้ใน IndexedDB ตอนเปิดหน้าแล้วอีกชั้น)
+                ถ้าเก็บสำเนาไม่ได้ → ไม่บันทึกอะไรในรอบนี้ เพื่อไม่ให้ของเดิมหาย
+            */
+            let oldRaw = null;
+
+            holdUnreadable = false;
+
+            try { oldRaw = storageAvailable ? localStorage.getItem(STORAGE_KEY) : null; } catch (error) { oldRaw = null; }
+
+            if (oldRaw) {
+
+                try {
+
+                    localStorage.setItem(STORAGE_KEY + ".unreadable-" + Date.now(), oldRaw);
+
+                } catch (error) {
+
+                    storageAvailable = false;
+
+                    holdUnreadable = true;
+
+                    showToast(
+                        "อ่านแผนที่เก็บไว้ไม่ได้ — ระบบยังไม่บันทึกทับ เปิดเมนูแผน › กู้คืนจากสำรอง หรือแจ้งผู้ดูแล",
+                        true
+                    );
+                }
+            }
+
+            if (storageAvailable) writeStore();
 
             lastSavedKey = snapshotKey(plan.data);
 
             updateLabel();
         }
 
-        if (!storageAvailable) {
+        if (!storageAvailable && !holdUnreadable) {
 
             showToast(
                 "เบราว์เซอร์นี้ไม่ให้เก็บข้อมูล แผนจะไม่ถูกบันทึกเมื่อปิดหน้า — ควร Export เก็บไว้",

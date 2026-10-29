@@ -457,6 +457,15 @@ body.zg-print-footer #companyFooter .footer-brand { font-size: calc(clamp(9px, .
         throw new Error("LIB_MISSING:jsPDF");
     }
 
+    /* PDF A3 แนวนอนจากภาพกระดาน (ใช้ทั้ง Export PDF และบันทึกเข้า CRM → ได้ไฟล์เหมือนกัน) */
+    async function pdfBlob(canvas) {
+        const JsPDF = await jsPDFClass();
+        const pdf = new JsPDF({ orientation: "landscape", unit: "mm", format: "a3", compress: true });
+        /* วางเต็มพื้นที่ A3 เหมือนพิมพ์ (ขอบ 6 mm) */
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", MARGIN_MM, MARGIN_MM, AREA_W_MM, AREA_H_MM);
+        return pdf.output("blob");
+    }
+
     async function exportAs(format) {
 
         if (busy) return;
@@ -496,11 +505,7 @@ body.zg-print-footer #companyFooter .footer-brand { font-size: calc(clamp(9px, .
                 ctx.drawImage(canvas, 0, 0);
                 download(await new Promise(resolve => flat.toBlob(resolve, "image/jpeg", 0.92)), `${base}.jpg`);
             } else if (format === "pdf") {
-                const JsPDF = await jsPDFClass();
-                const pdf = new JsPDF({ orientation: "landscape", unit: "mm", format: "a3", compress: true });
-                /* วางเต็มพื้นที่ A3 เหมือนพิมพ์ (ขอบ 6 mm) */
-                pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", MARGIN_MM, MARGIN_MM, AREA_W_MM, AREA_H_MM);
-                download(pdf.output("blob"), `${base}.pdf`);
+                download(await pdfBlob(canvas), `${base}.pdf`);
             }
 
             toast(`Export ${label} แล้ว`);
@@ -621,6 +626,6 @@ body.zg-print-footer #companyFooter .footer-brand { font-size: calc(clamp(9px, .
 
     mountButton();
 
-    window.ZGPrintA3 = { print, pageHtml, exportAs, buildA3Canvas };
+    window.ZGPrintA3 = { print, pageHtml, exportAs, buildA3Canvas, pdfBlob };
 
 })();
