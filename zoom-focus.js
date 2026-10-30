@@ -70,6 +70,11 @@ html.zg-zoom-focus .board-notes-section { min-height: 0 !important; }
             return 1;
         }
 
+        /* อยู่ในกรอบขนาดคงที่ (index.html) → ซูมเบราว์เซอร์ย่อขยายทั้งกรอบแทน ไม่ต้องจัดเอง */
+        if (window.top !== window) {
+            return 1;
+        }
+
         const ratio = Math.round((window.outerWidth / window.innerWidth) * 20) / 20;
 
         if (!Number.isFinite(ratio)) {

@@ -229,6 +229,18 @@ html:not(.zg-fit-board):not(.zg-zoom-focus) body:not(.zg-print-capture):not(.zg-
     setTimeout(() => relayout(true), 300);
     setTimeout(() => relayout(false), 1200);
 
-    window.ZGTallBoard = { isOn: () => root.classList.contains("zg-fit-board"), refresh: () => relayout(true) };
+    window.ZGTallBoard = {
+        isOn: () => root.classList.contains("zg-fit-board"),
+        refresh: () => relayout(true),
+        /* ค่าที่เลือกไว้ (แผนจำไว้ — fixed-board.js) */
+        wanted: () => on,
+        set(value) {
+            value = Boolean(value);
+            if (value === on) return;
+            on = value;
+            paint();
+            relayout(true);
+        }
+    };
 
 })();

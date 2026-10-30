@@ -1540,6 +1540,12 @@ body {
     display: flex;
 }
 
+/* แถบเลื่อนขวาของตาราง: ไม่แสดง (ใช้แถบ ▲ ▼ ด้านซ้าย vscroll-left.js + ล้อเมาส์แทน) */
+.category-scrollbar,
+.category-scrollbar.visible {
+    display: none !important;
+}
+
 
 .category-scroll-range {
     width: 12px;

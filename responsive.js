@@ -343,6 +343,11 @@ html.zg-portrait .zg-rotate-hint { display: flex; }
             return 1;
         }
 
+        /* อยู่ในกรอบขนาดคงที่ (index.html) → หน้าตาเดียวกันทุกเครื่อง ไม่ปรับตามซูมเบราว์เซอร์ */
+        if (window.top !== window) {
+            return 1;
+        }
+
         const ratio = window.outerWidth / window.innerWidth;
 
         /* ปัดเป็นขั้นละ 5% (ขอบหน้าต่างทำให้คลาดนิดหน่อย) */

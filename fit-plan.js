@@ -35,6 +35,15 @@
         rerender();
     }
 
+    /* เปิดแผนที่จำโหมดไว้ (fixed-board.js) → ตั้งตามแผน */
+    state.set = value => {
+        value = Boolean(value);
+        if (value === state.on) return;
+        state.on = value;
+        paint();
+        rerender();
+    };
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "toolbar-control zg-fit-plan-btn";

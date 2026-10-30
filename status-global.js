@@ -94,29 +94,16 @@
             const byId = new Map(global.statuses.map(item => [item.id, item]));
             const byName = new Map(global.statuses.map(item => [normalize(item.name), item]));
 
-            const remap = {};
-
             let globalChanged = false;
 
+            /*
+                แผนเป็นของแผน — สถานะในแผน (ชื่อ / สี / งานที่ใช้) ต้องเหมือนตอนบันทึกทุกเครื่อง
+                (เดิม: เปิดในเครื่องที่ชุดกลางต่างกัน → สีเปลี่ยนตามเครื่อง / งานย้ายไปสถานะอื่น)
+                ชุดกลางใช้แค่ "เพิ่มสถานะที่แผนยังไม่มี" ให้เลือกใช้ได้ทุกแผน
+            */
             objectRoles.forEach(role => {
 
-                if (byId.has(role.id)) return;
-
-                if (global.deleted.includes(role.id)) {
-
-                    remap[role.id] = global.statuses[0] && global.statuses[0].id;
-
-                    return;
-                }
-
-                const sameName = byName.get(normalize(role.name));
-
-                if (sameName) {
-
-                    remap[role.id] = sameName.id;
-
-                    return;
-                }
+                if (byId.has(role.id) || byName.has(normalize(role.name)) || global.deleted.includes(role.id)) return;
 
                 /* สถานะใหม่ที่มากับแผนนี้ → เพิ่มเข้าชุดกลาง */
                 const entry = { id: role.id, name: role.name, color: role.color };
@@ -130,20 +117,17 @@
 
             if (globalChanged) save(global);
 
-            const next = cloneRoles(global.statuses);
+            const planIds = new Set(objectRoles.map(role => role.id));
+            const planNames = new Set(objectRoles.map(role => normalize(role.name)));
+
+            const next = cloneRoles(objectRoles).concat(
+                cloneRoles(global.statuses.filter(item => !planIds.has(item.id) && !planNames.has(normalize(item.name))))
+            );
 
             const rolesChanged =
                 JSON.stringify(next) !== JSON.stringify(cloneRoles(objectRoles));
 
-            let objectsChanged = false;
-
-            timelineObjects.forEach(object => {
-
-                if (object.roleId && remap[object.roleId]) {
-                    object.roleId = remap[object.roleId];
-                    objectsChanged = true;
-                }
-            });
+            const objectsChanged = false;
 
             if (rolesChanged) {
                 objectRoles = next;
