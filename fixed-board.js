@@ -40,7 +40,12 @@
 
         /* ตั้งโหมดตามแผนก่อน แล้วค่อยวางของ (ตำแหน่งในแผนแปลงจากขนาดตอนบันทึกครั้งเดียว) */
         io.apply = function (data) {
-            const view = data && typeof data === "object" ? data.view : null;
+            /*
+                แผน / เทมเพลตที่บันทึกก่อนมีค่านี้ → ใช้โหมดเริ่มต้นที่ใช้ตอนสร้าง (↕ เปิด · ↔ เปิด)
+                ไม่ใช้ค่าของเครื่องที่เปิด (เครื่องที่ปิด ↕ ไว้ → เทมเพลตเพี้ยนจากที่บันทึก)
+            */
+            const isPlan = data && typeof data === "object" && Array.isArray(data.categories);
+            const view = isPlan ? (data.view && typeof data.view === "object" ? data.view : { tall: true, fitPlan: true }) : null;
             if (view && typeof view === "object") {
                 try {
                     if (typeof view.fitPlan === "boolean" && window.ZG_FIT_PLAN && typeof window.ZG_FIT_PLAN.set === "function") {
