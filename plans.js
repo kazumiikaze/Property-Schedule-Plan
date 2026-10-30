@@ -1341,6 +1341,11 @@ body.zg-dark .zg-plan-dropdown-import:hover { background: #33413a; }
 
         /* ---------- ใช้โดย start.js (หน้าเริ่มต้น) ---------- */
 
+        /* บันทึกสถานะปัจจุบันทันที (fixed-board.js: หลังแปลงแผนเก่าครั้งเดียว) */
+        saveNow() {
+            if (store) saveActive(true);
+        },
+
         isReady() {
             return Boolean(store);
         },

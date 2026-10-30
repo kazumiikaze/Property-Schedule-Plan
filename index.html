@@ -60,8 +60,61 @@
             background: #ffffff;
         }
 
+        /* จอกว้างพิเศษ: ปุ่มขยายการแสดงผล (เฉพาะเครื่อง · อยู่ในขอบว่างขวาล่าง · ไม่ยุ่งกับแผน / งานพิมพ์) */
+        #zgZoom {
+            position: fixed;
+            right: 14px;
+            bottom: 14px;
+            z-index: 10;
+            display: none;
+            align-items: center;
+            gap: 2px;
+            padding: 4px;
+            border: 1px solid #d6ddd9;
+            border-radius: 10px;
+            background: #ffffff;
+            box-shadow: 0 6px 18px -10px rgba(30, 41, 36, .35);
+            font: 12px/1 "Segoe UI", Tahoma, sans-serif;
+            color: #26302b;
+        }
+
+        html.zg-ultra #zgZoom {
+            display: flex;
+        }
+
+        #zgZoom span {
+            padding: 0 6px;
+            color: #66736c;
+        }
+
+        #zgZoom b {
+            min-width: 44px;
+            text-align: center;
+        }
+
+        #zgZoom button {
+            width: 28px;
+            height: 26px;
+            border: 0;
+            border-radius: 7px;
+            background: #eef3f0;
+            color: #26302b;
+            font: 600 15px/1 "Segoe UI", Tahoma, sans-serif;
+            cursor: pointer;
+        }
+
+        #zgZoom button:hover {
+            background: #dfeae4;
+        }
+
+        #zgZoom button:disabled {
+            opacity: .4;
+            cursor: default;
+        }
+
         @media print {
             #zgStage { position: static; transform: none !important; }
+            #zgZoom { display: none !important; }
         }
     </style>
 </head>
@@ -70,6 +123,13 @@
     <div id="zgSpacer"></div>
     <div id="zgStage">
         <iframe id="zgApp" title="Property Schedule Plan" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+    </div>
+
+    <div id="zgZoom" role="group" aria-label="ขนาดการแสดงผลบนจอนี้">
+        <span>ขนาดบนจอ</span>
+        <button type="button" data-zoom="-1" aria-label="ย่อ">−</button>
+        <b id="zgZoomValue">100%</b>
+        <button type="button" data-zoom="1" aria-label="ขยาย">+</button>
     </div>
 
     <script>
@@ -85,6 +145,14 @@
             /* จอกว้างพิเศษ (21:9 เช่น 3440×1440) เท่านั้นที่ใช้ "พอดีความสูง วางกลาง" — จอ 16:9 / โน้ตบุ๊ก ทำงานเหมือนเดิม */
             const ULTRAWIDE = 2.2;
 
+            /* จอกว้างพิเศษ: ขยายการแสดงผลได้ (จำไว้ในเครื่อง) · เหลือขอบข้างอย่างน้อยเท่านี้ ให้ปุ่มไม่ทับกระดาน */
+            const ZOOM_KEY = "zg-ultrawide-zoom";
+            const ZOOM_STEP = 0.1;
+            const SIDE_MIN = 230;
+            let ultraZoom = 1;
+            try { ultraZoom = Math.max(1, Number(localStorage.getItem(ZOOM_KEY)) || 1); } catch (error) { /* ไม่เป็นไร */ }
+            let ultraMax = 1;
+
             const stage = document.getElementById("zgStage");
             const spacer = document.getElementById("zgSpacer");
             const frame = document.getElementById("zgApp");
@@ -98,8 +166,12 @@
                 - จอกว้างพิเศษ (กว้างกว่ากระดานมาก) → พอดีความสูง วางกลางจอ
                 - สูงไม่พอมาก (จอแคบ) → คงสัดส่วน เลื่อนลงดูได้ · สูงเกินมาก → คงสัดส่วน เว้นด้านล่าง
             */
+            const zoomValue = document.getElementById("zgZoomValue");
+            const zoomButtons = document.querySelectorAll("#zgZoom button");
+
             function fit() {
                 const root = document.documentElement;
+                let ultra = false;
                 const vh = window.innerHeight;
                 let vw = window.innerWidth;
                 let sx = vw / W;
@@ -110,10 +182,23 @@
                     sy = vh / H;
                     root.classList.remove("zg-scroll");
                 } else if (need > vh && vw / vh >= ULTRAWIDE) {
-                    /* จอกว้างพิเศษ (เช่น 3440×1440) → พอดีความสูง วางกลางจอ เห็นทั้งกระดานไม่ต้องเลื่อน */
-                    sx = sy = vh / H;
+                    /* จอกว้างพิเศษ (เช่น 3440×1440) → พอดีความสูง วางกลางจอ เห็นทั้งกระดานไม่ต้องเลื่อน
+                       ขยายเพิ่มได้ด้วยปุ่ม "ขนาดบนจอ" (เกินความสูงจอ → เลื่อนลงดูได้) */
+                    ultra = true;
+                    const base = vh / H;
+                    ultraMax = Math.max(1, Math.floor((vw - SIDE_MIN * 2) / (W * base) * 10) / 10);
+                    const zoom = Math.min(ultraZoom, ultraMax);
+                    sx = sy = base * zoom;
+                    if (H * sy > vh + 1) {
+                        root.classList.add("zg-scroll");
+                        vw = root.clientWidth || vw;
+                    } else {
+                        root.classList.remove("zg-scroll");
+                    }
                     left = Math.round((vw - W * sx) / 2);
-                    root.classList.remove("zg-scroll");
+                    zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+                    zoomButtons[0].disabled = zoom <= 1.001;
+                    zoomButtons[1].disabled = zoom >= ultraMax - 0.001;
                 } else if (need > vh) {
                     root.classList.add("zg-scroll");
                     vw = root.clientWidth || vw;          // มีแถบเลื่อน → กว้างลดลง
@@ -125,7 +210,18 @@
                 sy = Math.max(0.1, sy);
                 stage.style.transform = `translate(${left}px, 0) scale(${sx}, ${sy})`;
                 spacer.style.height = root.classList.contains("zg-scroll") ? `${Math.ceil(H * sy)}px` : "0px";
+                root.classList.toggle("zg-ultra", ultra);
             }
+
+            document.getElementById("zgZoom").addEventListener("click", event => {
+                const button = event.target.closest("[data-zoom]");
+                if (!button) return;
+                const next = Math.round((Math.min(ultraZoom, ultraMax) + Number(button.dataset.zoom) * ZOOM_STEP) * 100) / 100;
+                ultraZoom = Math.max(1, Math.min(ultraMax, next));
+                try { localStorage.setItem(ZOOM_KEY, String(ultraZoom)); } catch (error) { /* ไม่เป็นไร */ }
+                fit();
+                focusApp();
+            });
 
             fit();
             window.addEventListener("resize", fit);
