@@ -82,6 +82,9 @@
             /* ความสูงต่างจากกรอบไม่เกินเท่านี้ → บีบ/ยืดแนวตั้งนิดเดียวให้เต็มจอพอดี (มองไม่ออก) */
             const FILL_TOLERANCE = 0.06;
 
+            /* จอกว้างพิเศษ (21:9 เช่น 3440×1440) เท่านั้นที่ใช้ "พอดีความสูง วางกลาง" — จอ 16:9 / โน้ตบุ๊ก ทำงานเหมือนเดิม */
+            const ULTRAWIDE = 2.2;
+
             const stage = document.getElementById("zgStage");
             const spacer = document.getElementById("zgSpacer");
             const frame = document.getElementById("zgApp");
@@ -92,7 +95,8 @@
             /*
                 เต็มความกว้างเสมอ (ไม่มีขอบซ้าย-ขวา)
                 - สูงไม่พอ/เกินนิดหน่อย → ปรับแนวตั้งให้พอดีจอ
-                - สูงไม่พอมาก → คงสัดส่วน เลื่อนลงดูได้ · สูงเกินมาก → คงสัดส่วน เว้นด้านล่าง
+                - จอกว้างพิเศษ (กว้างกว่ากระดานมาก) → พอดีความสูง วางกลางจอ
+                - สูงไม่พอมาก (จอแคบ) → คงสัดส่วน เลื่อนลงดูได้ · สูงเกินมาก → คงสัดส่วน เว้นด้านล่าง
             */
             function fit() {
                 const root = document.documentElement;
@@ -101,8 +105,14 @@
                 let sx = vw / W;
                 let sy = sx;
                 const need = H * sx;
+                let left = 0;
                 if (Math.abs(need - vh) / vh <= FILL_TOLERANCE) {
                     sy = vh / H;
+                    root.classList.remove("zg-scroll");
+                } else if (need > vh && vw / vh >= ULTRAWIDE) {
+                    /* จอกว้างพิเศษ (เช่น 3440×1440) → พอดีความสูง วางกลางจอ เห็นทั้งกระดานไม่ต้องเลื่อน */
+                    sx = sy = vh / H;
+                    left = Math.round((vw - W * sx) / 2);
                     root.classList.remove("zg-scroll");
                 } else if (need > vh) {
                     root.classList.add("zg-scroll");
@@ -113,7 +123,7 @@
                 }
                 sx = Math.max(0.1, sx);
                 sy = Math.max(0.1, sy);
-                stage.style.transform = `scale(${sx}, ${sy})`;
+                stage.style.transform = `translate(${left}px, 0) scale(${sx}, ${sy})`;
                 spacer.style.height = root.classList.contains("zg-scroll") ? `${Math.ceil(H * sy)}px` : "0px";
             }
 

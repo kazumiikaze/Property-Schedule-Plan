@@ -154,7 +154,8 @@
 .zg-bk button:disabled { opacity: .55; cursor: default; }
 .zg-bk__empty { padding: 26px 12px; text-align: center; color: #66736c; }
 .zg-bk__foot { padding: 10px 18px 14px; border-top: 1px solid #e3ebe6; display: flex; justify-content: flex-end; gap: 8px; }
-.zg-plan-dropdown-restore { flex-basis: 100%; }
+.zg-plan-dropdown-footer { flex-wrap: wrap; }
+.zg-plan-dropdown-footer .zg-plan-dropdown-restore { flex: 1 1 100%; }
 .zg-incog { position: fixed; z-index: 29000; left: 50%; top: 10px; transform: translateX(-50%); max-width: min(720px, calc(100vw - 24px));
     display: flex; gap: 10px; align-items: center; padding: 9px 10px 9px 14px; border-radius: 10px; background: #fff7e6; border: 1px solid #f2c46b;
     box-shadow: 0 8px 22px -10px rgba(120, 80, 0, .35); font: 13px/1.4 "Segoe UI", Tahoma, sans-serif; color: #5a3d00; }

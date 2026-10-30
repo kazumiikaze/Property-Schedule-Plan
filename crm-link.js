@@ -53,7 +53,9 @@
     }
 
     const linkKey = `${apiBase}|${link.customerId}|${link.jobId}`;
-    const planName = `${link.customerId}_${link.jobId}`;
+    /* ชื่อแผนบอกชัดว่าเลขไหนคือลูกค้า / งาน: CUS-00643_JOB-00732 (แผนเก่าชื่อ 00643_00732 → เปลี่ยนชื่อให้เอง) */
+    const planName = `CUS-${link.customerId}_JOB-${link.jobId}`;
+    const legacyName = `${link.customerId}_${link.jobId}`;
 
     const state = {
         planId: null,
@@ -189,7 +191,7 @@
         const list = window.ZGPlans.list();
         const remembered = savedLink();
         if (remembered && list.some(p => p.id === remembered.planId)) return remembered.planId;
-        const byName = list.find(p => p.name === planName);
+        const byName = list.find(p => p.name === planName) || list.find(p => p.name === legacyName);
         return byName ? byName.id : null;
     }
 
@@ -238,6 +240,7 @@
                 state.version = remembered.baseVersion || null;
                 state.savedHash = remembered.savedHash || "";
                 state.dirty = true;
+                if (window.ZGPlans.currentName() !== planName) window.ZGPlans.renameCurrent(planName);
                 setStatus("ใช้งานที่ยังไม่ได้บันทึกในเครื่องนี้ต่อ", "warn");
                 return true;
             }
@@ -248,6 +251,7 @@
                 if (window.ZGPlans.activeId() !== existing) window.ZGPlans.switchTo(existing);
                 await sleep(120);
                 window.ZGPlans.replaceCurrent(body.plan);
+                if (window.ZGPlans.currentName() !== planName) window.ZGPlans.renameCurrent(planName);
             } else {
                 window.ZGPlans.createFromData(planName, body.plan, `เปิดผังจาก CRM (เวอร์ชัน ${body.version})`);
             }
@@ -255,6 +259,7 @@
         } else {
             if (existing) {
                 if (window.ZGPlans.activeId() !== existing) window.ZGPlans.switchTo(existing);
+                if (window.ZGPlans.currentName() !== planName) window.ZGPlans.renameCurrent(planName);
             } else {
                 window.ZGPlans.createBlank(planName);
                 await sleep(200);
