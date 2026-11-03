@@ -163,6 +163,24 @@
             color: #55625b;
         }
 
+        .zg-gate__link {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            margin: -4px 0 14px;
+            padding: 9px 12px;
+            border: 1px solid #cfdcd4;
+            border-radius: 10px;
+            background: #f6f9f7;
+            color: #26302b;
+            font: 13px/1.3 Consolas, "Segoe UI", monospace;
+            text-align: center;
+        }
+
+        .zg-gate__link[hidden] {
+            display: none;
+        }
+
         .zg-gate__actions {
             display: flex;
             flex-direction: column;
@@ -236,6 +254,7 @@
             <img class="zg-gate__logo" src="icons/logo.svg?v=3" alt="" aria-hidden="true">
             <h1 id="zgGateTitle"></h1>
             <p id="zgGateText"></p>
+            <input id="zgGateLink" class="zg-gate__link" type="text" readonly aria-label="ลิงก์สำหรับเปิดใน Chrome" hidden>
             <div class="zg-gate__actions" id="zgGateActions"></div>
             <ul class="zg-gate__hint" id="zgGateHint"></ul>
         </div>
@@ -358,12 +377,28 @@
             function gateNotChrome(name) {
                 const link = location.href;
                 const tag = name.replace(/\s+/g, "-");
+                const field = document.getElementById("zgGateLink");
+                field.value = link;
+                field.hidden = false;
+                field.addEventListener("focus", () => field.select());
+                const copyFallback = () => {
+                    field.focus();
+                    field.select();
+                    try { return document.execCommand("copy"); } catch (error) { return false; }
+                };
                 const actions = [{
                     label: "คัดลอกลิงก์ไปเปิดใน Chrome",
                     primary: true,
-                    run: event => {
-                        const done = () => { event.target.textContent = "คัดลอกลิงก์แล้ว — วางในช่องที่อยู่ของ Chrome"; };
-                        if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, done); else done();
+                    run: async event => {
+                        const button = event.currentTarget;
+                        let ok = false;
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(link); ok = true; }
+                        } catch (error) { ok = false; }
+                        if (!ok) ok = copyFallback();
+                        button.textContent = ok
+                            ? "คัดลอกลิงก์แล้ว ✓ — เปิด Chrome › คลิกช่องที่อยู่ › Ctrl+V › Enter"
+                            : "คัดลอกอัตโนมัติไม่ได้ — ลิงก์ถูกเลือกไว้แล้ว กด Ctrl+C";
                     }
                 }];
                 const plans = readKey("zg-property-schedule-plans-v1");
@@ -380,7 +415,7 @@
                     } });
                 }
                 actions.push({ label: "ดาวน์โหลด Google Chrome", href: "https://www.google.com/chrome/" });
-                const hints = [];
+                const hints = ["เปิด Google Chrome › คลิกช่องที่อยู่ด้านบน › วางลิงก์ (Ctrl+V) › กด Enter"];
                 if (plans || hasTpls) {
                     hints.push("แผนที่ทำไว้ในเบราว์เซอร์นี้ไม่ย้ายไป Chrome เอง — กดดาวน์โหลดเก็บไว้ก่อน");
                     if (plans) hints.push("ใน Chrome: กดชื่อแผน › ⟲ กู้คืนจากสำรอง › เปิดไฟล์สำรอง (.json) › กู้แผนนี้");
