@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- โลโก้ Property Schedule Plan: โครงอาคาร (ส้ม) + แถบไทม์ไลน์ (เขียว) · กรอบจัตุรัสสำหรับไอคอน -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-15 -44 330 330" role="img" aria-label="Property Schedule Plan logo">
+  <path
+    fill="#F28C28"
+    fill-rule="evenodd"
+    d="M0 95 L150 15 L300 79 V150 L150 87 V45 L22 111 V210 H0 Z
+       M174 57 L194 66 V108 L174 100 Z
+       M216 75 L236 84 V126 L216 118 Z
+       M258 93 L278 102 V144 L258 136 Z"
+  />
+  <g fill="#079568">
+    <path d="M48 115 H157 L147 139 H38 Z" />
+    <path d="M89 153 H221 L211 177 H79 Z" />
+    <path d="M135 191 H296 L286 215 H125 Z" />
+  </g>
+</svg>

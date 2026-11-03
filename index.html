@@ -10,8 +10,10 @@
     <!-- ติดตั้งเป็นแอปบนเครื่อง (Edge / Chrome → ติดตั้งแอปนี้) · ไอคอนแท็บ -->
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#2e8b57">
-    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="icons/logo.svg?v=2">
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png?v=2">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=2">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
 
     <!--
         กรอบขนาดคงที่ — หน้ากระดานเหมือนกันทุกเครื่อง / ทุกขนาดจอ
@@ -145,12 +147,10 @@
         }
 
         .zg-gate__logo {
-            width: 54px;
-            height: 54px;
-            margin: 0 auto 14px;
-            border: 7px solid #7ac143;
-            border-radius: 50%;
-            box-sizing: border-box;
+            display: block;
+            width: 78px;
+            height: 78px;
+            margin: 0 auto 10px;
         }
 
         .zg-gate__card h1 {
@@ -233,7 +233,7 @@
 
     <div id="zgGate" role="dialog" aria-modal="true" aria-labelledby="zgGateTitle">
         <div class="zg-gate__card">
-            <div class="zg-gate__logo" aria-hidden="true"></div>
+            <img class="zg-gate__logo" src="icons/logo.svg?v=2" alt="" aria-hidden="true">
             <h1 id="zgGateTitle"></h1>
             <p id="zgGateText"></p>
             <div class="zg-gate__actions" id="zgGateActions"></div>
@@ -382,10 +382,9 @@
                     if (plans) hints.push("ใน Chrome: กดชื่อแผน › ⟲ กู้คืนจากสำรอง › เปิดไฟล์สำรอง (.json) › กู้แผนนี้");
                     if (hasTpls) hints.push("เทมเพลต: ใน Chrome เปิดเมนูเทมเพลต › ⬇ Import เทมเพลต (.json)");
                 }
-                if (isApp) hints.push("แอปนี้ติดตั้งผ่านเบราว์เซอร์อื่น — ถอนการติดตั้ง แล้วติดตั้งใหม่จาก Chrome");
                 showGate({
                     title: "ใช้ได้เฉพาะ Google Chrome",
-                    text: `กรุณาเปิด Property Schedule Plan ด้วย Google Chrome (ตอนนี้เปิดด้วย ${name}${isApp ? " แบบแอป" : ""})`,
+                    text: `กรุณาเปิด Property Schedule Plan ด้วย Google Chrome หรือแอปที่ติดตั้งในเครื่อง (ตอนนี้เปิดด้วย ${name})`,
                     actions,
                     hints
                 });
@@ -415,6 +414,8 @@
             }
 
             (async function gate() {
+                /* เปิดเป็นแอปที่ติดตั้งในเครื่อง (ผ่าน Chrome หรือ Edge) → ใช้งานได้เลย · ข้อมูลอยู่กับแอปนั้น */
+                if (isApp) { startApp(); return; }
                 const name = browserName();
                 if (name !== "Chrome") { gateNotChrome(name); return; }
                 if (!isApp && navigator.getInstalledRelatedApps) {
