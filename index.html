@@ -112,6 +112,112 @@
             cursor: default;
         }
 
+        /* หน้าแจ้ง: ใช้ได้เฉพาะ Chrome / เปิดในแอป */
+        #zgGate {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            place-items: center;
+            padding: 24px;
+            background: #f4f6f5;
+            font: 15px/1.55 "Segoe UI", Tahoma, sans-serif;
+            color: #26302b;
+        }
+
+        html.zg-gated #zgGate {
+            display: grid;
+        }
+
+        html.zg-gated #zgStage,
+        html.zg-gated #zgZoom {
+            display: none !important;
+        }
+
+        .zg-gate__card {
+            width: min(560px, 100%);
+            padding: 32px 32px 26px;
+            border: 1px solid #dfe6e2;
+            border-radius: 18px;
+            background: #ffffff;
+            box-shadow: 0 24px 60px -30px rgba(20, 40, 30, .35);
+            text-align: center;
+        }
+
+        .zg-gate__logo {
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 14px;
+            border: 7px solid #7ac143;
+            border-radius: 50%;
+            box-sizing: border-box;
+        }
+
+        .zg-gate__card h1 {
+            margin: 0 0 8px;
+            font-size: 21px;
+        }
+
+        .zg-gate__card p {
+            margin: 0 0 18px;
+            color: #55625b;
+        }
+
+        .zg-gate__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .zg-gate__btn {
+            display: block;
+            padding: 11px 16px;
+            border: 1px solid #cfdcd4;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #26302b;
+            font: 600 14px/1.3 "Segoe UI", Tahoma, sans-serif;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .zg-gate__btn--primary {
+            border-color: #2e8b57;
+            background: #2e8b57;
+            color: #ffffff;
+        }
+
+        .zg-gate__btn:hover {
+            filter: brightness(.96);
+        }
+
+        .zg-gate__hint {
+            margin: 16px 0 0;
+            padding-left: 18px;
+            font-size: 12.5px;
+            color: #7a867f;
+            text-align: left;
+        }
+
+        .zg-gate__hint:empty {
+            display: none;
+        }
+
+        .zg-gate__hint li {
+            margin: 3px 0;
+        }
+
+        .zg-gate__skip {
+            display: inline-block;
+            margin-top: 14px;
+            font-size: 12px;
+            color: #8a978f;
+            background: none;
+            border: 0;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
         @media print {
             #zgStage { position: static; transform: none !important; }
             #zgZoom { display: none !important; }
@@ -123,6 +229,16 @@
     <div id="zgSpacer"></div>
     <div id="zgStage">
         <iframe id="zgApp" title="Property Schedule Plan" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+    </div>
+
+    <div id="zgGate" role="dialog" aria-modal="true" aria-labelledby="zgGateTitle">
+        <div class="zg-gate__card">
+            <div class="zg-gate__logo" aria-hidden="true"></div>
+            <h1 id="zgGateTitle"></h1>
+            <p id="zgGateText"></p>
+            <div class="zg-gate__actions" id="zgGateActions"></div>
+            <ul class="zg-gate__hint" id="zgGateHint"></ul>
+        </div>
     </div>
 
     <div id="zgZoom" role="group" aria-label="ขนาดการแสดงผลบนจอนี้">
@@ -157,8 +273,161 @@
             const spacer = document.getElementById("zgSpacer");
             const frame = document.getElementById("zgApp");
 
-            /* ลิงก์จาก CRM (?customer_id=…) / ลิงก์อื่น → ส่งต่อให้ตัวโปรแกรมครบ */
-            frame.src = "app.html" + location.search + location.hash;
+            /*
+                ลิงก์ส่งต่อให้ตัวโปรแกรมครบ (?customer_id=… จาก CRM ฯลฯ)
+                เปิดผ่าน "ลิงก์เปิดแอป" (web+zgplan://open?…) → Chrome ส่งมาเป็น ?launch=… → แกะค่าเดิมออกมา
+            */
+            function appQuery() {
+                const params = new URLSearchParams(location.search);
+                const launch = params.get("launch");
+                if (launch) {
+                    const at = launch.indexOf("?");
+                    return at >= 0 ? launch.slice(at) : "";
+                }
+                return location.search;
+            }
+
+            /* =====================================================
+               ใช้ได้เฉพาะ Google Chrome · เครื่องที่ติดตั้งแอปแล้ว → ใช้แอป
+            ===================================================== */
+
+            const isApp = ["standalone", "window-controls-overlay", "minimal-ui", "fullscreen"]
+                .some(mode => window.matchMedia && window.matchMedia(`(display-mode: ${mode})`).matches);
+
+            function browserName() {
+                const brands = (navigator.userAgentData && navigator.userAgentData.brands || []).map(b => b.brand);
+                const ua = navigator.userAgent || "";
+                if (brands.includes("Microsoft Edge") || /Edg\//.test(ua)) return "Microsoft Edge";
+                if (brands.includes("Opera") || /OPR\//.test(ua)) return "Opera";
+                if (brands.includes("Brave") || navigator.brave) return "Brave";
+                if (/Firefox\//.test(ua)) return "Firefox";
+                if (brands.includes("Google Chrome") || brands.includes("HeadlessChrome")) return "Chrome";
+                if (!brands.length && /Chrome\//.test(ua) && !/Edg\/|OPR\/|Vivaldi|YaBrowser|SamsungBrowser/.test(ua)) return "Chrome";
+                if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "Safari";
+                return "เบราว์เซอร์นี้";
+            }
+
+            function download(name, text) {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            }
+
+            function readKey(key) {
+                try { return localStorage.getItem(key); } catch (error) { return null; }
+            }
+
+            function showGate({ title, text, actions, hints, skip }) {
+                document.getElementById("zgGateTitle").textContent = title;
+                document.getElementById("zgGateText").textContent = text;
+                const box = document.getElementById("zgGateActions");
+                box.innerHTML = "";
+                actions.forEach(action => {
+                    const el = document.createElement(action.href ? "a" : "button");
+                    el.className = "zg-gate__btn" + (action.primary ? " zg-gate__btn--primary" : "");
+                    el.textContent = action.label;
+                    if (action.href) el.href = action.href;
+                    else el.type = "button";
+                    if (action.run) el.addEventListener("click", action.run);
+                    box.appendChild(el);
+                });
+                const hint = document.getElementById("zgGateHint");
+                hint.innerHTML = "";
+                (hints || []).forEach(line => { const li = document.createElement("li"); li.textContent = line; hint.appendChild(li); });
+                document.querySelectorAll(".zg-gate__skip").forEach(el => el.remove());
+                if (skip) {
+                    const b = document.createElement("button");
+                    b.type = "button";
+                    b.className = "zg-gate__skip";
+                    b.textContent = skip.label;
+                    b.addEventListener("click", skip.run);
+                    hint.after(b);
+                }
+                document.documentElement.classList.add("zg-gated");
+            }
+
+            /* เบราว์เซอร์อื่น: ไม่โหลดโปรแกรม · ให้ดาวน์โหลดแผน/เทมเพลตที่ทำไว้ในเบราว์เซอร์นี้ไปกู้คืนใน Chrome */
+            function gateNotChrome(name) {
+                const link = location.href;
+                const tag = name.replace(/\s+/g, "-");
+                const actions = [{
+                    label: "คัดลอกลิงก์ไปเปิดใน Chrome",
+                    primary: true,
+                    run: event => {
+                        const done = () => { event.target.textContent = "คัดลอกลิงก์แล้ว — วางในช่องที่อยู่ของ Chrome"; };
+                        if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, done); else done();
+                    }
+                }];
+                const plans = readKey("zg-property-schedule-plans-v1");
+                if (plans) {
+                    actions.push({ label: "ดาวน์โหลดแผนทั้งหมดในเบราว์เซอร์นี้ (.json)", run: () => download(`plans-from-${tag}.json`, plans) });
+                }
+                const tpls = readKey("zg-property-schedule-templates-v1");
+                const hasTpls = Boolean(tpls && tpls !== "[]");
+                if (hasTpls) {
+                    actions.push({ label: "ดาวน์โหลดเทมเพลตที่บันทึกไว้ (.json)", run: () => {
+                        let list = [];
+                        try { list = JSON.parse(tpls) || []; } catch (error) { list = []; }
+                        download(`templates-from-${tag}.json`, JSON.stringify({ app: "zg-property-schedule-templates", version: 1, exportedAt: new Date().toISOString(), templates: list }, null, 2));
+                    } });
+                }
+                actions.push({ label: "ดาวน์โหลด Google Chrome", href: "https://www.google.com/chrome/" });
+                const hints = [];
+                if (plans || hasTpls) {
+                    hints.push("แผนที่ทำไว้ในเบราว์เซอร์นี้ไม่ย้ายไป Chrome เอง — กดดาวน์โหลดเก็บไว้ก่อน");
+                    if (plans) hints.push("ใน Chrome: กดชื่อแผน › ⟲ กู้คืนจากสำรอง › เปิดไฟล์สำรอง (.json) › กู้แผนนี้");
+                    if (hasTpls) hints.push("เทมเพลต: ใน Chrome เปิดเมนูเทมเพลต › ⬇ Import เทมเพลต (.json)");
+                }
+                if (isApp) hints.push("แอปนี้ติดตั้งผ่านเบราว์เซอร์อื่น — ถอนการติดตั้ง แล้วติดตั้งใหม่จาก Chrome");
+                showGate({
+                    title: "ใช้ได้เฉพาะ Google Chrome",
+                    text: `กรุณาเปิด Property Schedule Plan ด้วย Google Chrome (ตอนนี้เปิดด้วย ${name}${isApp ? " แบบแอป" : ""})`,
+                    actions,
+                    hints
+                });
+            }
+
+            /* Chrome แบบแท็บ บนเครื่องที่ติดตั้งแอปแล้ว → เปิดในแอป (ค่าจากลิงก์ เช่น CRM ส่งต่อครบ) */
+            function gateUseApp() {
+                const target = "web+zgplan://open" + appQuery() + location.hash;
+                showGate({
+                    title: "เครื่องนี้ติดตั้งแอปไว้แล้ว",
+                    text: "เปิดใช้งาน Property Schedule Plan จากแอปในเครื่อง",
+                    actions: [{ label: "เปิดในแอป", primary: true, href: target }],
+                    hints: [
+                        "ครั้งแรก Chrome จะถามยืนยันการเปิดแอป — กด เปิด / Open",
+                        "หรือเปิดแอปจาก Start menu / ไอคอนบน Desktop ก็ได้",
+                        "ปิดแท็บนี้ได้หลังแอปเปิดแล้ว"
+                    ],
+                    skip: { label: "ใช้ในเบราว์เซอร์ครั้งนี้", run: () => { document.documentElement.classList.remove("zg-gated"); startApp(); } }
+                });
+            }
+
+            let started = false;
+            function startApp() {
+                if (started) return;
+                started = true;
+                frame.src = "app.html" + appQuery() + location.hash;
+            }
+
+            (async function gate() {
+                const name = browserName();
+                if (name !== "Chrome") { gateNotChrome(name); return; }
+                if (!isApp && navigator.getInstalledRelatedApps) {
+                    try {
+                        const apps = await Promise.race([
+                            navigator.getInstalledRelatedApps(),
+                            new Promise(resolve => setTimeout(() => resolve([]), 1500))
+                        ]);
+                        if (Array.isArray(apps) && apps.some(app => app && app.platform === "webapp")) { gateUseApp(); return; }
+                    } catch (error) { /* ตรวจไม่ได้ → ใช้ต่อในแท็บ */ }
+                }
+                startApp();
+            })();
 
             /*
                 เต็มความกว้างเสมอ (ไม่มีขอบซ้าย-ขวา)

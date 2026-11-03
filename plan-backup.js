@@ -200,7 +200,7 @@ body.zg-print-capture .zg-incog, body.zg-print-capture .zg-bk-overlay { display:
             <div class="zg-bk__head"><b>กู้คืนแผนจากสำรอง</b>
             <p>ระบบสำรองแผนทั้งหมดในเครื่องนี้ให้อัตโนมัติ (รายวัน 7 วัน + ตอนเปิดหน้า 5 ครั้งล่าสุด) · แผนที่กู้จะถูกเพิ่มเป็นแผนใหม่ ไม่ทับแผนที่มีอยู่</p></div>
             <div class="zg-bk__body"><div class="zg-bk__empty">กำลังโหลด…</div></div>
-            <div class="zg-bk__foot"><button type="button" data-act="close">ปิด</button></div></div>`;
+            <div class="zg-bk__foot"><button type="button" data-act="file" title="ไฟล์ที่ดาวน์โหลดจากหน้านี้ หรือจากหน้า &quot;ใช้ได้เฉพาะ Google Chrome&quot; ของเบราว์เซอร์อื่น">เปิดไฟล์สำรอง (.json)</button><span style="flex:1"></span><button type="button" data-act="close">ปิด</button></div></div>`;
         document.body.appendChild(overlay);
 
         const close = () => { overlay.remove(); document.removeEventListener("keydown", onKey, true); };
@@ -210,21 +210,38 @@ body.zg-print-capture .zg-incog, body.zg-print-capture .zg-bk-overlay { display:
 
         const body = overlay.querySelector(".zg-bk__body");
         let sets = [];
+        let note = "";
         try {
             sets = (await getAll()).sort((a, b) => b.at.localeCompare(a.at));
         } catch (error) {
-            body.innerHTML = `<div class="zg-bk__empty">เบราว์เซอร์นี้ไม่ให้เก็บสำรอง (IndexedDB ถูกปิด)</div>`;
-            return;
-        }
-        if (!sets.length) {
-            body.innerHTML = `<div class="zg-bk__empty">ยังไม่มีชุดสำรอง — ระบบจะเริ่มเก็บให้อัตโนมัติจากนี้</div>`;
-            return;
+            note = "เบราว์เซอร์นี้ไม่ให้เก็บสำรอง (IndexedDB ถูกปิด) — เปิดไฟล์สำรอง (.json) ได้";
         }
 
+        /* เปิดไฟล์สำรองจากเครื่อง (เช่น ดาวน์โหลดมาจากเบราว์เซอร์อื่น) → แสดงเป็นชุดบนสุด กู้ทีละแผนได้ */
+        overlay.querySelector("[data-act=file]").addEventListener("click", () => {
+            const input = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
+            input.addEventListener("change", async () => {
+                const file = input.files && input.files[0];
+                if (!file) return;
+                const text = await file.text();
+                const plans = summarize(text);
+                if (!plans) { alert("ไฟล์นี้ไม่ใช่ไฟล์สำรองแผน"); return; }
+                sets = [{ id: "file-" + Date.now(), kind: "file", at: new Date(file.lastModified || Date.now()).toISOString(), raw: text, plans, bytes: text.length, fileName: file.name }]
+                    .concat(sets.filter(s => s.kind !== "file"));
+                render();
+            });
+            input.click();
+        });
+
+        const render = () => {
+        if (!sets.length) {
+            body.innerHTML = `<div class="zg-bk__empty">${note || "ยังไม่มีชุดสำรอง — ระบบจะเริ่มเก็บให้อัตโนมัติจากนี้"}</div>`;
+            return;
+        }
         body.innerHTML = sets.map((set, i) => `
             <details class="zg-bk__set"${i === 0 ? " open" : ""} data-id="${esc(set.id)}">
-              <summary><span class="zg-bk__kind${set.kind === "open" ? " zg-bk__kind--open" : ""}">${set.kind === "open" ? "ตอนเปิดหน้า" : "รายวัน"}</span>
-                <span class="zg-bk__when">${esc(when(set.at))}</span>
+              <summary><span class="zg-bk__kind${set.kind === "open" ? " zg-bk__kind--open" : ""}">${set.kind === "file" ? "จากไฟล์" : set.kind === "open" ? "ตอนเปิดหน้า" : "รายวัน"}</span>
+                <span class="zg-bk__when">${esc(set.kind === "file" ? set.fileName : when(set.at))}</span>
                 <span class="zg-bk__meta">${set.plans.length} แผน · ${sizeText(set.bytes)}</span></summary>
               <div class="zg-bk__plans">
                 ${set.plans.length ? set.plans.map((plan, p) => `
@@ -235,6 +252,8 @@ body.zg-print-capture .zg-incog, body.zg-print-capture .zg-bk-overlay { display:
                 <div class="zg-bk__plan"><span></span><button type="button" data-download>ดาวน์โหลดชุดนี้ (.json)</button></div>
               </div>
             </details>`).join("");
+        };
+        render();
 
         body.addEventListener("click", event => {
             const box = event.target.closest(".zg-bk__set");
