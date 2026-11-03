@@ -1,17 +1,106 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- โลโก้ Property Schedule Plan: โครงอาคาร (ส้ม) + แถบไทม์ไลน์ (เขียว) · กรอบจัตุรัสสำหรับไอคอน -->
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-15 -44 330 330" role="img" aria-label="Property Schedule Plan logo">
-  <path
-    fill="#F28C28"
-    fill-rule="evenodd"
-    d="M0 95 L150 15 L300 79 V150 L150 87 V45 L22 111 V210 H0 Z
-       M174 57 L194 66 V108 L174 100 Z
-       M216 75 L236 84 V126 L216 118 Z
-       M258 93 L278 102 V144 L258 136 Z"
-  />
-  <g fill="#079568">
-    <path d="M48 115 H157 L147 139 H38 Z" />
-    <path d="M89 153 H221 L211 177 H79 Z" />
-    <path d="M135 191 H296 L286 215 H125 Z" />
+<!-- โลโก้ Property Schedule Plan: อาคารสีส้ม (แสง/เงา) + แถบไทม์ไลน์สีเขียวมรกต · กรอบจัตุรัสสำหรับไอคอน -->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="512"
+  height="512"
+  viewBox="-20 -50 340 340"
+  role="img"
+  aria-label="Property Schedule Plan logo"
+>
+  <defs>
+    <!-- สีส้ม -->
+    <linearGradient id="orangeSurface" x1="0" y1="20" x2="250" y2="205" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB347"/>
+      <stop offset="0.3" stop-color="#FF921F"/>
+      <stop offset="0.65" stop-color="#F4770B"/>
+      <stop offset="1" stop-color="#C94C05"/>
+    </linearGradient>
+
+    <!-- แสงนุ่มบนด้านซ้าย -->
+    <linearGradient id="leftLight" x1="20" y1="195" x2="150" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD398" stop-opacity="0.3"/>
+      <stop offset="0.5" stop-color="#FFB65C" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- เงาบริเวณรอยพับ -->
+    <linearGradient id="foldShade" x1="150" y1="70" x2="205" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#97401C" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#B65422" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#B65422" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- แสงฟุ้งบนผิว -->
+    <radialGradient id="softLight" cx="0.4" cy="0.05" r="0.85">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.45" stop-color="#FFF7E9" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- สีเขียวมรกต -->
+    <linearGradient id="mintSurface" x1="0%" y1="0%" x2="95%" y2="100%">
+      <stop offset="0" stop-color="#55DCA4"/>
+      <stop offset="0.35" stop-color="#20BD82"/>
+      <stop offset="0.7" stop-color="#079B69"/>
+      <stop offset="1" stop-color="#006B4A"/>
+    </linearGradient>
+
+    <!-- แสงไล่ระดับบนแถบ ไม่มีเส้นขาว -->
+    <linearGradient id="barLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.25"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- เงานุ่มเพิ่มมิติ -->
+    <filter id="softShadow" x="-25%" y="-35%" width="160%" height="180%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#364C40" flood-opacity="0.16"/>
+    </filter>
+
+    <!-- โครงอาคาร ลดความมนของมุม -->
+    <path id="building" d="
+      M0 98 Q0 95 3 93 L147 16 Q150 14 153 16 L297 78 Q300 79 300 82 V146 Q300 151 296 149
+      L153 88 Q150 87 150 84 V48 Q150 45 147 47 L25 112 Q22 113 22 116 V207 Q22 210 19 210
+      H3 Q0 210 0 207 Z"/>
+
+    <clipPath id="buildingClip">
+      <use href="#building"/>
+    </clipPath>
+
+    <!-- ช่องหน้าต่างโปร่งใส -->
+    <mask id="windowMask" maskUnits="userSpaceOnUse" x="-10" y="0" width="330" height="230" style="mask-type:luminance">
+      <rect x="-10" y="0" width="330" height="230" fill="#FFFFFF"/>
+      <g fill="#000000">
+        <path d="M177 59 Q174 58 174 62 V96 Q174 100 178 102 L190 107 Q194 109 194 105 V70 Q194 66 190 65 Z"/>
+        <path d="M219 77 Q216 76 216 80 V114 Q216 118 220 120 L232 125 Q236 127 236 123 V88 Q236 84 232 83 Z"/>
+        <path d="M261 95 Q258 94 258 98 V132 Q258 136 262 138 L274 143 Q278 145 278 141 V106 Q278 102 274 101 Z"/>
+      </g>
+    </mask>
+
+    <!-- แถบไทม์ไลน์ ขอบคมขึ้นเล็กน้อย -->
+    <g id="timeline">
+      <path d="M51 115 H153 Q157 115 155.5 118.5 L148.5 136 Q147 139 144 139 H42 Q38 139 39.5 135.5 L46.5 118 Q48 115 51 115 Z"/>
+      <path d="M92 153 H217 Q221 153 219.5 156.5 L212.5 174 Q211 177 208 177 H83 Q79 177 80.5 173.5 L87.5 156 Q89 153 92 153 Z"/>
+      <path d="M138 191 H292 Q296 191 294.5 194.5 L287.5 212 Q286 215 283 215 H129 Q125 215 126.5 211.5 L133.5 194 Q135 191 138 191 Z"/>
+    </g>
+  </defs>
+
+  <!-- อาคารสีส้ม พร้อมแสงและเงา -->
+  <g filter="url(#softShadow)">
+    <g mask="url(#windowMask)">
+      <use href="#building" fill="url(#orangeSurface)"/>
+      <g clip-path="url(#buildingClip)">
+        <path d="M0 95 L150 15 V47 L22 116 V210 H0 Z" fill="url(#leftLight)"/>
+        <path d="M150 16 L210 42 V115 L150 89 Z" fill="url(#foldShade)"/>
+        <rect x="0" y="15" width="300" height="200" fill="url(#softLight)"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- ไทม์ไลน์สีเขียว พร้อมแสงและเงา -->
+  <g filter="url(#softShadow)">
+    <use href="#timeline" fill="url(#mintSurface)"/>
+    <use href="#timeline" fill="url(#barLight)"/>
   </g>
 </svg>
