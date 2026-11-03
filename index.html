@@ -291,8 +291,12 @@
                ใช้ได้เฉพาะ Google Chrome · เครื่องที่ติดตั้งแอปแล้ว → ใช้แอป
             ===================================================== */
 
-            const isApp = ["standalone", "window-controls-overlay", "minimal-ui", "fullscreen"]
-                .some(mode => window.matchMedia && window.matchMedia(`(display-mode: ${mode})`).matches);
+            /* แอปที่ติดตั้ง = ไม่ใช่แท็บเบราว์เซอร์ (standalone / window-controls-overlay / tabbed / minimal-ui …) */
+            const isApp = Boolean(window.matchMedia) && (
+                ["standalone", "window-controls-overlay", "minimal-ui", "fullscreen", "tabbed"]
+                    .some(mode => window.matchMedia(`(display-mode: ${mode})`).matches)
+                || (window.matchMedia("(display-mode: browser)").media !== "not all" && !window.matchMedia("(display-mode: browser)").matches)
+            ) || window.navigator.standalone === true;
 
             function browserName() {
                 const brands = (navigator.userAgentData && navigator.userAgentData.brands || []).map(b => b.brand);
@@ -391,7 +395,7 @@
             }
 
             /* Chrome แบบแท็บ บนเครื่องที่ติดตั้งแอปแล้ว → เปิดในแอป (ค่าจากลิงก์ เช่น CRM ส่งต่อครบ) */
-            function gateUseApp() {
+            function gateUseApp(appOnly) {
                 const target = "web+zgplan://open" + appQuery() + location.hash;
                 showGate({
                     title: "เครื่องนี้ติดตั้งแอปไว้แล้ว",
@@ -402,7 +406,8 @@
                         "หรือเปิดแอปจาก Start menu / ไอคอนบน Desktop ก็ได้",
                         "ปิดแท็บนี้ได้หลังแอปเปิดแล้ว"
                     ],
-                    skip: { label: "ใช้ในเบราว์เซอร์ครั้งนี้", run: () => { document.documentElement.classList.remove("zg-gated"); startApp(); } }
+                    /* แท็บที่ไม่ใช่ Chrome (เช่น Edge) → ใช้ในเบราว์เซอร์ไม่ได้ ต้องเปิดในแอป */
+                    skip: appOnly ? null : { label: "ใช้ในเบราว์เซอร์ครั้งนี้", run: () => { document.documentElement.classList.remove("zg-gated"); startApp(); } }
                 });
             }
 
@@ -417,16 +422,20 @@
                 /* เปิดเป็นแอปที่ติดตั้งในเครื่อง (ผ่าน Chrome หรือ Edge) → ใช้งานได้เลย · ข้อมูลอยู่กับแอปนั้น */
                 if (isApp) { startApp(); return; }
                 const name = browserName();
-                if (name !== "Chrome") { gateNotChrome(name); return; }
-                if (!isApp && navigator.getInstalledRelatedApps) {
+                /* แท็บ (Chrome หรือ Edge) บนเครื่องที่ติดตั้งแอปไว้แล้ว → เปิดในแอป */
+                if (navigator.getInstalledRelatedApps) {
                     try {
                         const apps = await Promise.race([
                             navigator.getInstalledRelatedApps(),
                             new Promise(resolve => setTimeout(() => resolve([]), 1500))
                         ]);
-                        if (Array.isArray(apps) && apps.some(app => app && app.platform === "webapp")) { gateUseApp(); return; }
-                    } catch (error) { /* ตรวจไม่ได้ → ใช้ต่อในแท็บ */ }
+                        if (Array.isArray(apps) && apps.some(app => app && app.platform === "webapp")) {
+                            gateUseApp(name !== "Chrome");
+                            return;
+                        }
+                    } catch (error) { /* ตรวจไม่ได้ → ไปขั้นถัดไป */ }
                 }
+                if (name !== "Chrome") { gateNotChrome(name); return; }
                 startApp();
             })();
 
